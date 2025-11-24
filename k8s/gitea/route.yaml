@@ -1,0 +1,15 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: gitea
+  labels:
+    app.kubernetes.io/name: gitea
+spec:
+  host: gitea.home.mburnsfire.net
+  to:
+    kind: Service
+    name: gitea-http
+    weight: 100
+  port:
+    targetPort: http
+

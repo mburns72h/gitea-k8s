@@ -1,0 +1,345 @@
+# Gitea HA Production Deployment on OpenShift
+# Clean installation with 3 replicas, PostgreSQL HA, and Redis
+# Chart: gitea-charts/gitea (official Helm chart)
+# Namespace: gitea-prod
+
+# Gitea image configuration
+image:
+  registry: docker.io
+  repository: gitea/gitea
+  tag: "1.22"
+  pullPolicy: IfNotPresent
+  rootless: true
+
+# Enable HA with 3 replicas
+replicaCount: 3
+
+# Use RollingUpdate strategy for zero-downtime updates
+strategy:
+  type: "RollingUpdate"
+
+# Service configuration
+service:
+  http:
+    type: ClusterIP
+    port: 3000
+  ssh:
+    enabled: true
+    type: NodePort
+    port: 2222
+    nodePort: 32222
+
+# Disable default ingress (using OpenShift Route instead)
+ingress:
+  enabled: false
+
+# OpenShift-friendly security context overrides
+# Avoid forcing fixed UIDs/GIDs so SCC 'restricted' can assign a random UID
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+  fsGroup: null
+  runAsUser: null
+  runAsGroup: null
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  runAsNonRoot: true
+  runAsUser: null
+  runAsGroup: null
+  capabilities:
+    drop:
+      - ALL
+
+initContainerSecurityContext:
+  allowPrivilegeEscalation: false
+  runAsNonRoot: true
+  runAsUser: null
+  runAsGroup: null
+  capabilities:
+    drop:
+      - ALL
+
+# Persistence configuration - using OpenShift dynamic storage
+persistence:
+  enabled: true
+  # Let OpenShift create a PVC dynamically
+  # Gitea requires RWX (ReadWriteMany) for multi-replica deployments
+  accessModes:
+    - ReadWriteMany
+  size: 50Gi
+  # Specify your OpenShift storage class that supports RWX
+  # Common options: nfs-client, ocs-storagecluster-cephfs, etc.
+  # Leave blank to use default storage class
+  storageClass: ""
+  mountPath: /data
+
+# Gitea application configuration
+gitea:
+  # Admin user will be created on first startup
+  admin:
+    username: "gitea_admin"
+    email: "mburns72h+gitea@gmail.com"
+    # Password will be auto-generated on first startup if not set
+    # Check pod logs for the generated password
+    existingSecret: ""
+
+  # Skip chown/chmod init (fails on OpenShift restricted SCC)
+  initPreScript: |
+    #!/bin/sh
+    echo "Skipping chown on /data (OpenShift restricted SCC)"
+    exit 0
+
+  # Pod anti-affinity to spread replicas across nodes
+  podAnnotations: {}
+
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 200
+    periodSeconds: 10
+    timeoutSeconds: 1
+    successThreshold: 1
+    failureThreshold: 10
+
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 1
+    successThreshold: 1
+    failureThreshold: 3
+
+  # Gitea configuration (app.ini)
+  config:
+    APP_NAME: "Gitea: Git with a cup of tea"
+    RUN_MODE: prod
+    RUN_USER: git
+
+    server:
+      DISABLE_SSH: false
+      SSH_DOMAIN: gitea-ssh.home.mburnsfire.net
+      SSH_PORT: 2222
+      SSH_LISTEN_PORT: 2222
+      ROOT_URL: https://gitea.home.mburnsfire.net/
+      LFS_START_SERVER: true
+      OFFLINE_MODE: false
+
+    database:
+      DB_TYPE: postgres
+      # Will be overridden by environment variables below
+
+    session:
+      # Use Redis for sessions (required for HA)
+      PROVIDER: redis
+      PROVIDER_CONFIG: redis://:REDIS_PASSWORD@gitea-redis-master:6379/0?pool_size=100&idle_timeout=180s
+      # Session settings for HA
+      COOKIE_SECURE: true
+      COOKIE_NAME: gitea_session
+
+    cache:
+      # Use Redis for cache (required for HA)
+      ENABLED: true
+      ADAPTER: redis
+      HOST: redis://:REDIS_PASSWORD@gitea-redis-master:6379/1?pool_size=100&idle_timeout=180s
+
+    queue:
+      # Use Redis for queues (recommended for HA)
+      TYPE: redis
+      CONN_STR: redis://:REDIS_PASSWORD@gitea-redis-master:6379/2?pool_size=100&idle_timeout=180s
+
+    security:
+      INSTALL_LOCK: true
+      REVERSE_PROXY_LIMIT: 1
+      REVERSE_PROXY_TRUSTED_PROXIES: "*"
+      PASSWORD_HASH_ALGO: pbkdf2
+
+    service:
+      DISABLE_REGISTRATION: false
+      REQUIRE_SIGNIN_VIEW: false
+      REGISTER_EMAIL_CONFIRM: false
+      ENABLE_NOTIFY_MAIL: true
+      DEFAULT_KEEP_EMAIL_PRIVATE: false
+      DEFAULT_ALLOW_CREATE_ORGANIZATION: true
+      DEFAULT_ENABLE_TIMETRACKING: true
+
+    mailer:
+      ENABLED: true
+      # Use internal OpenShift SMTP relay service
+      SMTP_ADDR: smtp-relay.default.svc.cluster.local
+      SMTP_PORT: 25
+      PROTOCOL: smtp
+      FROM: "Gitea <mburns72h+gitea@gmail.com>"
+
+    openid:
+      ENABLE_OPENID_SIGNIN: false
+      ENABLE_OPENID_SIGNUP: false
+
+    migrations:
+      ALLOWED_DOMAINS: "*.home.mburnsfire.net"
+      ALLOW_LOCALNETWORKS: true
+
+    repository.pull-request:
+      DEFAULT_MERGE_STYLE: merge
+
+    repository.signing:
+      DEFAULT_TRUST_MODEL: committer
+
+  # Environment variables for database and secrets
+  env:
+    # Skip chown/chmod operations (OpenShift compatibility)
+    - name: USER_UID
+      value: "auto"
+    - name: USER_GID
+      value: "auto"
+    - name: GITEA_SKIP_CHOWN
+      value: "true"
+
+    # Database configuration
+    - name: GITEA__database__DB_TYPE
+      value: postgres
+    - name: GITEA__database__HOST
+      value: gitea-postgresql-ha-pgpool:5432
+    - name: GITEA__database__NAME
+      value: gitea
+    - name: GITEA__database__USER
+      valueFrom:
+        secretKeyRef:
+          name: gitea-db-app
+          key: username
+    - name: GITEA__database__PASSWD
+      valueFrom:
+        secretKeyRef:
+          name: gitea-db-app
+          key: password
+    - name: GITEA__database__SSL_MODE
+      value: disable
+
+    # Gitea secrets
+    - name: GITEA__security__INTERNAL_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: gitea-secrets
+          key: internal_token
+    - name: GITEA__security__SECRET_KEY
+      valueFrom:
+        secretKeyRef:
+          name: gitea-secrets
+          key: secret_key
+    - name: GITEA__lfs__JWT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: gitea-secrets
+          key: lfs_jwt_secret
+    - name: GITEA__oauth2__JWT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: gitea-secrets
+          key: oauth2_jwt_secret
+
+    # Redis password for session/cache/queue
+    - name: REDIS_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: gitea-redis
+          key: redis-password
+
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 2
+      memory: 2Gi
+
+# Disable single PostgreSQL instance
+postgresql:
+  enabled: false
+
+# Enable PostgreSQL HA cluster
+postgresql-ha:
+  enabled: true
+  global:
+    postgresql:
+      auth:
+        username: giteauser
+        database: gitea
+        existingSecret: gitea-pg-ha-secrets
+        secretKeys:
+          adminPasswordKey: postgresql-password
+          userPasswordKey: password
+          replicationPasswordKey: repmgr-password
+
+  postgresql:
+    replicaCount: 3
+    # Spread replicas across nodes
+    podAntiAffinityPreset: hard
+    # OpenShift compatibility
+    podSecurityContext:
+      enabled: false
+    containerSecurityContext:
+      enabled: false
+    # Storage for each PostgreSQL instance
+    persistence:
+      enabled: true
+      size: 20Gi
+      # Uses OpenShift dynamic provisioning
+      storageClass: ""
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 2
+        memory: 4Gi
+    # Disable volumePermissions (fails on OpenShift restricted SCC)
+    volumePermissions:
+      enabled: false
+
+  pgpool:
+    replicaCount: 2
+    # Spread replicas across nodes
+    podAntiAffinityPreset: hard
+    # OpenShift compatibility
+    podSecurityContext:
+      enabled: false
+    containerSecurityContext:
+      enabled: false
+    customUsersSecret: gitea-pgpool-custom-users
+    resources:
+      requests:
+        cpu: 200m
+        memory: 256Mi
+      limits:
+        cpu: 1
+        memory: 1Gi
+
+# Enable Redis for session/cache/queue storage (required for HA)
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: true
+    existingSecret: gitea-redis
+    existingSecretPasswordKey: redis-password
+  master:
+    persistence:
+      enabled: true
+      size: 8Gi
+      storageClass: ""
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    # OpenShift compatibility
+    podSecurityContext:
+      enabled: false
+    containerSecurityContext:
+      enabled: false
+
+# Disable redis-cluster (using standalone redis instead)
+redis-cluster:
+  enabled: false

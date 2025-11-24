@@ -1,0 +1,59 @@
+---
+# PV for Gitea data (reuses existing /volume1/docker/gitea/data)
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: gitea-data-pv
+spec:
+  capacity:
+    storage: 50Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  nfs:
+    server: diskstation.home.mburnsfire.net
+    path: /volume1/docker/gitea/data
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gitea-shared-storage
+  namespace: gitea
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 50Gi
+  volumeName: gitea-data-pv
+  storageClassName: ""
+---
+# PV for PostgreSQL data (reuses existing /volume1/docker/gitea/db)
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: gitea-db-pv
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  nfs:
+    server: diskstation.home.mburnsfire.net
+    path: /volume1/docker/gitea/db
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gitea-postgresql-data
+  namespace: gitea
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  volumeName: gitea-db-pv
+  storageClassName: ""
+
