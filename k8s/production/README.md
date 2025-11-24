@@ -26,7 +26,7 @@ This directory contains a production-ready, highly available Gitea deployment fo
 First, generate secure passwords and tokens:
 
 ```bash
-cd k8s/gitea-prod
+cd k8s/production
 chmod +x generate-secrets.sh
 ./generate-secrets.sh
 ```
