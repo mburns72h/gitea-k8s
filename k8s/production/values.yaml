@@ -185,6 +185,15 @@ gitea:
     repository.signing:
       DEFAULT_TRUST_MODEL: committer
 
+    # Enable Gitea Actions for CI/CD
+    actions:
+      ENABLED: true
+      DEFAULT_ACTIONS_URL: https://github.com
+
+    # Storage configuration for artifacts
+    storage:
+      STORAGE_TYPE: local
+
   # Environment variables for database and secrets
   env:
     # Skip chown/chmod operations (OpenShift compatibility)

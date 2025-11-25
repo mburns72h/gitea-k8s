@@ -92,6 +92,13 @@ oc exec -n gitea -it $(oc get pod -n gitea -l app.kubernetes.io/name=gitea -o na
 - **Distributed sessions**: Valkey cluster for session persistence
 - **Rolling updates**: Zero-downtime deployments
 
+### CI/CD with Gitea Actions
+
+- **Automated runners**: GitHub Actions-compatible CI/CD system
+- **Scalable execution**: Deploy multiple runners for parallel jobs
+- **Docker support**: Build and test containerized applications
+- See [ACTIONS-SETUP.md](k8s/production/ACTIONS-SETUP.md) for setup guide
+
 ### OpenShift Compatibility
 
 - **Rootless Gitea**: No privileged containers required
@@ -206,6 +213,7 @@ To completely remove the deployment:
 ## Documentation
 
 - [Production Deployment Guide](k8s/production/README.md)
+- [CI/CD Actions Setup Guide](k8s/production/ACTIONS-SETUP.md)
 - [Gitea Documentation](https://docs.gitea.com/)
 - [Gitea Helm Chart](https://gitea.com/gitea/helm-chart)
 - [OpenShift Documentation](https://docs.openshift.com/)

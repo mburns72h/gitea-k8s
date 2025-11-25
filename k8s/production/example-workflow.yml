@@ -1,0 +1,214 @@
+# Example Gitea Actions Workflow
+# Place this file in your repository at: .gitea/workflows/ci.yml
+#
+# This workflow demonstrates common CI tasks:
+# - Checking out code
+# - Running tests
+# - Building Docker images
+# - Deploying to OpenShift
+
+name: CI/CD Pipeline
+
+# Trigger on pushes to main and all pull requests
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+# Environment variables available to all jobs
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: ${{ gitea.repository }}
+
+jobs:
+  # Job 1: Lint and Test
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run linter
+        run: npm run lint
+
+      - name: Run tests
+        run: npm test
+
+      - name: Generate coverage report
+        run: npm run test:coverage
+
+      # Upload test results as artifacts
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+
+  # Job 2: Build Docker Image
+  build:
+    runs-on: ubuntu-latest
+    needs: test  # Only run after tests pass
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=semver,pattern={{version}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Job 3: Deploy to OpenShift (only on main branch)
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install OpenShift CLI
+        run: |
+          curl -LO https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/openshift-client-linux.tar.gz
+          tar -xvf openshift-client-linux.tar.gz
+          sudo mv oc /usr/local/bin/
+          oc version
+
+      - name: Login to OpenShift
+        run: |
+          oc login --token=${{ secrets.OPENSHIFT_TOKEN }} \
+                   --server=${{ secrets.OPENSHIFT_SERVER }} \
+                   --insecure-skip-tls-verify
+
+      - name: Deploy to OpenShift
+        run: |
+          oc project gitea-prod
+          oc set image deployment/my-app \
+            my-app=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          oc rollout status deployment/my-app
+
+      - name: Verify deployment
+        run: |
+          oc get pods -l app=my-app
+          oc get route my-app
+
+  # Job 4: Security Scan
+  security:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy results
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-scan
+          path: trivy-results.sarif
+
+# Example workflow for Python projects:
+# ---
+# name: Python CI
+#
+# on: [push, pull_request]
+#
+# jobs:
+#   test:
+#     runs-on: ubuntu-latest
+#     strategy:
+#       matrix:
+#         python-version: ['3.9', '3.10', '3.11']
+#
+#     steps:
+#       - uses: actions/checkout@v4
+#
+#       - name: Set up Python ${{ matrix.python-version }}
+#         uses: actions/setup-python@v4
+#         with:
+#           python-version: ${{ matrix.python-version }}
+#
+#       - name: Install dependencies
+#         run: |
+#           python -m pip install --upgrade pip
+#           pip install -r requirements.txt
+#           pip install pytest pytest-cov
+#
+#       - name: Run tests
+#         run: pytest --cov=. --cov-report=xml
+#
+#       - name: Upload coverage
+#         uses: codecov/codecov-action@v3
+#         with:
+#           files: ./coverage.xml
+
+# Example workflow for Go projects:
+# ---
+# name: Go CI
+#
+# on: [push, pull_request]
+#
+# jobs:
+#   test:
+#     runs-on: ubuntu-latest
+#
+#     steps:
+#       - uses: actions/checkout@v4
+#
+#       - name: Set up Go
+#         uses: actions/setup-go@v4
+#         with:
+#           go-version: '1.21'
+#
+#       - name: Build
+#         run: go build -v ./...
+#
+#       - name: Test
+#         run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+#
+#       - name: Upload coverage
+#         uses: codecov/codecov-action@v3
