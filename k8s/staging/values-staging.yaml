@@ -111,7 +111,7 @@ gitea:
     server:
       DISABLE_SSH: false
       SSH_DOMAIN: gitea-staging-ssh.home.mburnsfire.net
-      SSH_PORT: 2222
+      SSH_PORT: 2223
       SSH_LISTEN_PORT: 2222
       ROOT_URL: https://gitea-staging.home.mburnsfire.net/
       LFS_START_SERVER: true
