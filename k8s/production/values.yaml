@@ -181,6 +181,7 @@ gitea:
 
     webhook:
       ALLOWED_HOST_LIST: private
+      SKIP_TLS_VERIFY: true
 
     repository.pull-request:
       DEFAULT_MERGE_STYLE: merge
