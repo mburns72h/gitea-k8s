@@ -1,0 +1,42 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gitea-prod
+  namespace: openshift-gitops
+spec:
+  project: default
+
+  source:
+    repoURL: ssh://gitea-ssh.home.mburnsfire.net:2222/mburns/gitea-k8s.git
+    targetRevision: main
+    path: k8s/production
+    helm:
+      valueFiles:
+        - values.yaml
+      releaseName: gitea
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: gitea
+
+  syncPolicy:
+    # MANUAL SYNC ONLY - No automated sync for production
+    # automated:
+    #   prune: false
+    #   selfHeal: false
+    syncOptions:
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
+  # Health assessment for Gitea components
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas

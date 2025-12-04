@@ -1,0 +1,43 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gitea-staging
+  namespace: openshift-gitops
+spec:
+  project: default
+
+  source:
+    repoURL: ssh://gitea-ssh.home.mburnsfire.net:2222/mburns/gitea-k8s.git
+    targetRevision: main
+    path: k8s/staging
+    helm:
+      valueFiles:
+        - values-staging.yaml
+      releaseName: gitea-staging
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: gitea-staging
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
+  # Health assessment for Gitea components
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas

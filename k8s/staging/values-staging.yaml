@@ -1,0 +1,317 @@
+# Gitea Staging Deployment on OpenShift
+# Minimal single-instance deployment for testing configuration changes
+# Chart: gitea-charts/gitea (official Helm chart)
+# Namespace: gitea-staging
+
+# Gitea image configuration
+image:
+  registry: docker.io
+  repository: gitea/gitea
+  tag: "1.22"
+  pullPolicy: IfNotPresent
+  rootless: true
+
+# Single replica for staging
+replicaCount: 1
+
+# Use RollingUpdate strategy
+strategy:
+  type: "RollingUpdate"
+
+# Service configuration
+service:
+  http:
+    type: ClusterIP
+    port: 3000
+  ssh:
+    enabled: true
+    type: NodePort
+    port: 2222
+    nodePort: 32223  # Different from production (32222)
+
+# Disable default ingress (using OpenShift Route instead)
+ingress:
+  enabled: false
+
+# OpenShift-friendly security context overrides
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+  fsGroup: null
+  runAsUser: null
+  runAsGroup: null
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  runAsNonRoot: true
+  runAsUser: null
+  runAsGroup: null
+  capabilities:
+    drop:
+      - ALL
+
+initContainerSecurityContext:
+  allowPrivilegeEscalation: false
+  runAsNonRoot: true
+  runAsUser: null
+  runAsGroup: null
+  capabilities:
+    drop:
+      - ALL
+
+# Persistence configuration - smaller for staging
+persistence:
+  enabled: true
+  # Single replica can use RWO (ReadWriteOnce)
+  accessModes:
+    - ReadWriteOnce
+  size: 10Gi  # Reduced from 50Gi
+  storageClass: ""
+  mountPath: /data
+
+# Gitea application configuration
+gitea:
+  # Admin user will be created on first startup
+  admin:
+    username: "gitea_admin"
+    email: "mburns72h+gitea-staging@gmail.com"
+    existingSecret: ""
+
+  # Skip chown/chmod init (fails on OpenShift restricted SCC)
+  initPreScript: |
+    #!/bin/sh
+    echo "Skipping chown on /data (OpenShift restricted SCC)"
+    exit 0
+
+  podAnnotations: {}
+
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 200
+    periodSeconds: 10
+    timeoutSeconds: 1
+    successThreshold: 1
+    failureThreshold: 10
+
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 1
+    successThreshold: 1
+    failureThreshold: 3
+
+  # Gitea configuration (app.ini)
+  config:
+    APP_NAME: "Gitea Staging: Git with a cup of tea"
+    RUN_MODE: prod
+    RUN_USER: git
+
+    server:
+      DISABLE_SSH: false
+      SSH_DOMAIN: gitea-staging-ssh.home.mburnsfire.net
+      SSH_PORT: 2222
+      SSH_LISTEN_PORT: 2222
+      ROOT_URL: https://gitea-staging.home.mburnsfire.net/
+      LFS_START_SERVER: true
+      OFFLINE_MODE: false
+
+    database:
+      DB_TYPE: postgres
+      # Will be overridden by environment variables below
+
+    session:
+      # Use Redis for sessions
+      PROVIDER: redis
+      PROVIDER_CONFIG: redis://:REDIS_PASSWORD@gitea-staging-redis-master:6379/0?pool_size=100&idle_timeout=180s
+      COOKIE_SECURE: true
+      COOKIE_NAME: gitea_staging_session
+
+    cache:
+      # Use Redis for cache
+      ENABLED: true
+      ADAPTER: redis
+      HOST: redis://:REDIS_PASSWORD@gitea-staging-redis-master:6379/1?pool_size=100&idle_timeout=180s
+
+    queue:
+      # Use Redis for queues
+      TYPE: redis
+      CONN_STR: redis://:REDIS_PASSWORD@gitea-staging-redis-master:6379/2?pool_size=100&idle_timeout=180s
+
+    security:
+      INSTALL_LOCK: true
+      REVERSE_PROXY_LIMIT: 1
+      REVERSE_PROXY_TRUSTED_PROXIES: "*"
+      PASSWORD_HASH_ALGO: pbkdf2
+
+    service:
+      DISABLE_REGISTRATION: false
+      REQUIRE_SIGNIN_VIEW: false
+      REGISTER_EMAIL_CONFIRM: false
+      ENABLE_NOTIFY_MAIL: false  # Disabled for staging
+      DEFAULT_KEEP_EMAIL_PRIVATE: false
+      DEFAULT_ALLOW_CREATE_ORGANIZATION: true
+      DEFAULT_ENABLE_TIMETRACKING: true
+
+    mailer:
+      ENABLED: false  # Disabled for staging
+
+    openid:
+      ENABLE_OPENID_SIGNIN: false
+      ENABLE_OPENID_SIGNUP: false
+
+    migrations:
+      ALLOWED_DOMAINS: "*.home.mburnsfire.net"
+      ALLOW_LOCALNETWORKS: true
+
+    webhook:
+      ALLOWED_HOST_LIST: private
+      SKIP_TLS_VERIFY: true
+
+    repository.pull-request:
+      DEFAULT_MERGE_STYLE: merge
+
+    repository.signing:
+      DEFAULT_TRUST_MODEL: committer
+
+    # Enable Gitea Actions for CI/CD
+    actions:
+      ENABLED: true
+      DEFAULT_ACTIONS_URL: https://github.com
+
+    # Storage configuration for artifacts
+    storage:
+      STORAGE_TYPE: local
+
+  # Environment variables for database and secrets
+  env:
+    # Skip chown/chmod operations (OpenShift compatibility)
+    - name: USER_UID
+      value: "auto"
+    - name: USER_GID
+      value: "auto"
+    - name: GITEA_SKIP_CHOWN
+      value: "true"
+
+    # Database configuration
+    - name: GITEA__database__DB_TYPE
+      value: postgres
+    - name: GITEA__database__HOST
+      value: gitea-staging-postgresql:5432
+    - name: GITEA__database__NAME
+      value: gitea
+    - name: GITEA__database__USER
+      valueFrom:
+        secretKeyRef:
+          name: gitea-staging-postgresql
+          key: username
+    - name: GITEA__database__PASSWD
+      valueFrom:
+        secretKeyRef:
+          name: gitea-staging-postgresql
+          key: password
+    - name: GITEA__database__SSL_MODE
+      value: disable
+
+    # Gitea secrets
+    - name: GITEA__security__INTERNAL_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: gitea-staging-secrets
+          key: internal_token
+    - name: GITEA__security__SECRET_KEY
+      valueFrom:
+        secretKeyRef:
+          name: gitea-staging-secrets
+          key: secret_key
+    - name: GITEA__lfs__JWT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: gitea-staging-secrets
+          key: lfs_jwt_secret
+    - name: GITEA__oauth2__JWT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: gitea-staging-secrets
+          key: oauth2_jwt_secret
+
+    # Redis password for session/cache/queue
+    - name: REDIS_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: gitea-staging-redis
+          key: redis-password
+
+  resources:
+    requests:
+      cpu: 100m  # Reduced from 200m
+      memory: 256Mi  # Reduced from 512Mi
+    limits:
+      cpu: 1  # Reduced from 2
+      memory: 1Gi  # Reduced from 2Gi
+
+# Use single PostgreSQL instance (not HA)
+postgresql:
+  enabled: true
+  auth:
+    username: giteauser
+    database: gitea
+    existingSecret: gitea-staging-postgresql
+    secretKeys:
+      userPasswordKey: password
+      adminPasswordKey: postgres-password
+  primary:
+    # OpenShift compatibility
+    podSecurityContext:
+      enabled: false
+    containerSecurityContext:
+      enabled: false
+    persistence:
+      enabled: true
+      size: 5Gi  # Reduced from 20Gi
+      storageClass: ""
+    resources:
+      requests:
+        cpu: 100m  # Reduced from 500m
+        memory: 256Mi  # Reduced from 1Gi
+      limits:
+        cpu: 500m  # Reduced from 2
+        memory: 1Gi  # Reduced from 4Gi
+    # Disable volumePermissions (fails on OpenShift restricted SCC)
+    volumePermissions:
+      enabled: false
+
+# Disable PostgreSQL HA for staging
+postgresql-ha:
+  enabled: false
+
+# Enable Redis for session/cache/queue storage
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: true
+    existingSecret: gitea-staging-redis
+    existingSecretPasswordKey: redis-password
+  master:
+    persistence:
+      enabled: true
+      size: 2Gi  # Reduced from 8Gi
+      storageClass: ""
+    resources:
+      requests:
+        cpu: 50m  # Reduced from 100m
+        memory: 64Mi  # Reduced from 128Mi
+      limits:
+        cpu: 250m  # Reduced from 500m
+        memory: 256Mi  # Reduced from 512Mi
+    # OpenShift compatibility
+    podSecurityContext:
+      enabled: false
+    containerSecurityContext:
+      enabled: false
+
+# Disable redis-cluster (using standalone redis instead)
+redis-cluster:
+  enabled: false
