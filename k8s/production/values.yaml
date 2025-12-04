@@ -179,6 +179,9 @@ gitea:
       ALLOWED_DOMAINS: "*.home.mburnsfire.net"
       ALLOW_LOCALNETWORKS: true
 
+    webhook:
+      ALLOWED_HOST_LIST: private
+
     repository.pull-request:
       DEFAULT_MERGE_STYLE: merge
 
