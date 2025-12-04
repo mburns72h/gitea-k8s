@@ -1,0 +1,148 @@
+---
+# Gitea Actions Runner with Docker-in-Docker for OpenShift
+# This uses a DinD sidecar instead of mounting the host Docker socket
+#
+# Deploy: oc apply -f gitea-actions-runner-dind.yaml -n gitea
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gitea-runner
+  namespace: gitea
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gitea-runner
+  namespace: gitea
+  labels:
+    app: gitea-runner
+spec:
+  replicas: 2  # Run 2 runners for parallel job execution
+  selector:
+    matchLabels:
+      app: gitea-runner
+  template:
+    metadata:
+      labels:
+        app: gitea-runner
+    spec:
+      serviceAccountName: gitea-runner
+
+      # Use pod anti-affinity to spread runners across nodes
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: gitea-runner
+                topologyKey: kubernetes.io/hostname
+
+      containers:
+        # Docker-in-Docker daemon sidecar
+        - name: docker-daemon
+          image: docker:27-dind
+          securityContext:
+            privileged: true
+          env:
+            - name: DOCKER_TLS_CERTDIR
+              value: ""  # Disable TLS for simplicity (communication is within pod)
+          volumeMounts:
+            - name: docker-storage
+              mountPath: /var/lib/docker
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 2
+              memory: 2Gi
+
+        # Gitea Actions runner
+        - name: runner
+          image: gitea/act_runner:latest
+          imagePullPolicy: Always
+
+          # Wait for Docker daemon to be ready before starting
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting for Docker daemon to be ready..."
+              until wget -q -O- http://localhost:2375/_ping >/dev/null 2>&1; do
+                echo "Docker daemon not ready yet, waiting..."
+                sleep 2
+              done
+              echo "Docker daemon is ready!"
+
+              # Register runner if not already registered
+              if [ ! -f /data/.runner ]; then
+                echo "Registering runner..."
+                act_runner register \
+                  --instance "${GITEA_INSTANCE_URL}" \
+                  --token "${GITEA_RUNNER_REGISTRATION_TOKEN}" \
+                  --name "${GITEA_RUNNER_NAME}" \
+                  --labels "${GITEA_RUNNER_LABELS}" \
+                  --no-interactive
+              fi
+
+              # Start runner daemon
+              echo "Starting runner daemon..."
+              exec act_runner daemon
+
+          env:
+            # Gitea instance URL (internal service)
+            - name: GITEA_INSTANCE_URL
+              value: "http://gitea-http:3000"
+
+            # Runner registration token (from secret)
+            - name: GITEA_RUNNER_REGISTRATION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: gitea-runner-token
+                  key: token
+
+            # Runner name (includes pod name for uniqueness)
+            - name: GITEA_RUNNER_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+
+            # Runner labels (define what this runner can execute)
+            - name: GITEA_RUNNER_LABELS
+              value: "ubuntu-latest:docker://node:20-bullseye,ubuntu-22.04:docker://node:20-bullseye,self-hosted:host:-self-hosted"
+
+            # Connect to DinD sidecar
+            - name: DOCKER_HOST
+              value: "tcp://localhost:2375"
+
+          volumeMounts:
+            - name: runner-data
+              mountPath: /data
+
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 1
+              memory: 1Gi
+
+          # Liveness probe - check if runner is responsive
+          livenessProbe:
+            exec:
+              command:
+                - pgrep
+                - act_runner
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+      volumes:
+        - name: runner-data
+          emptyDir: {}
+        - name: docker-storage
+          emptyDir: {}

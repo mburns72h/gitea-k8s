@@ -1,0 +1,27 @@
+# Gitea Actions Configuration Patch
+# Merge this into your values.yaml to enable Gitea Actions
+#
+# Add this under gitea.config section:
+
+gitea:
+  config:
+    # Enable Gitea Actions
+    actions:
+      ENABLED: true
+      # Use existing Redis for job queue (HA compatible)
+      DEFAULT_ACTIONS_URL: https://github.com
+
+    # Configure where actions logs are stored
+    # Uses the existing shared storage
+    storage:
+      STORAGE_TYPE: local
+
+    # Optional: Configure artifact retention
+    # artifacts:
+    #   RETENTION_DAYS: 90
+
+# After adding this configuration, update your Helm deployment:
+# helm upgrade gitea gitea-charts/gitea \
+#   --namespace gitea-prod \
+#   --values values.yaml \
+#   --reuse-values

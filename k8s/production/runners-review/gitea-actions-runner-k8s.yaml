@@ -1,0 +1,199 @@
+---
+# Gitea Actions Runner with Kubernetes Executor (Cloud-Native)
+# This spawns new Kubernetes pods for each CI job - no Docker/DinD needed!
+#
+# Deploy: oc apply -f gitea-actions-runner-k8s.yaml -n gitea
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gitea-runner
+  namespace: gitea
+---
+# RBAC permissions for runner to create pods
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: gitea-runner
+  namespace: gitea
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/exec", "pods/log"]
+    verbs: ["get", "list", "create", "delete", "watch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "create", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: gitea-runner
+  namespace: gitea
+subjects:
+  - kind: ServiceAccount
+    name: gitea-runner
+    namespace: gitea
+roleRef:
+  kind: Role
+  name: gitea-runner
+  apiGroup: rbac.authorization.k8s.io
+---
+# Runner configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gitea-runner-config
+  namespace: gitea
+data:
+  config.yaml: |
+    log:
+      level: info
+    runner:
+      name: k8s-runner
+      fetch_timeout: 5s
+      fetch_interval: 2s
+      labels:
+        - "ubuntu-latest:docker://node:20-bookworm"
+        - "ubuntu-22.04:docker://node:20-bookworm"
+        - "self-hosted:host:-self-hosted"
+    cache:
+      enabled: true
+      dir: "/data/cache"
+      host: ""
+      port: 0
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gitea-runner
+  namespace: gitea
+  labels:
+    app: gitea-runner
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: gitea-runner
+  template:
+    metadata:
+      labels:
+        app: gitea-runner
+    spec:
+      serviceAccountName: gitea-runner
+
+      # Spread runners across nodes
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: gitea-runner
+                topologyKey: kubernetes.io/hostname
+
+      containers:
+        - name: runner
+          image: gitea/act_runner:latest
+          imagePullPolicy: Always
+
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              # Register runner on first startup
+              if [ ! -f /data/.runner ]; then
+                echo "Registering runner..."
+                act_runner register \
+                  --instance "${GITEA_INSTANCE_URL}" \
+                  --token "${GITEA_RUNNER_REGISTRATION_TOKEN}" \
+                  --name "${GITEA_RUNNER_NAME}" \
+                  --labels "ubuntu-latest:docker://catthehacker/ubuntu:act-latest,ubuntu-22.04:docker://catthehacker/ubuntu:act-22.04" \
+                  --no-interactive
+              fi
+
+              # Start runner daemon
+              echo "Starting runner daemon..."
+              act_runner daemon
+
+          env:
+            # Gitea instance URL
+            - name: GITEA_INSTANCE_URL
+              value: "http://gitea-http:3000"
+
+            # Runner registration token
+            - name: GITEA_RUNNER_REGISTRATION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: gitea-runner-token
+                  key: token
+
+            # Runner name with pod name for uniqueness
+            - name: GITEA_RUNNER_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+
+            # Use Kubernetes as the container backend
+            - name: KUBERNETES_ENABLED
+              value: "true"
+            - name: KUBERNETES_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: KUBERNETES_SERVICE_ACCOUNT
+              value: "gitea-runner"
+
+            # Config file location
+            - name: CONFIG_FILE
+              value: /config/config.yaml
+
+          volumeMounts:
+            - name: runner-data
+              mountPath: /data
+            - name: config
+              mountPath: /config
+
+          # Security context - no privileged access needed!
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+          livenessProbe:
+            exec:
+              command:
+                - pgrep
+                - -f
+                - "act_runner daemon"
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          readinessProbe:
+            exec:
+              command:
+                - test
+                - -f
+                - /data/.runner
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+      volumes:
+        - name: runner-data
+          emptyDir: {}
+        - name: config
+          configMap:
+            name: gitea-runner-config

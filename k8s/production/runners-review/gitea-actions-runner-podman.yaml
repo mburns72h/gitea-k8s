@@ -1,0 +1,114 @@
+---
+# Gitea Actions Runner with Podman for OpenShift
+# Uses Podman (rootless) instead of Docker - perfect for OpenShift!
+#
+# Deploy: oc apply -f gitea-actions-runner-podman.yaml -n gitea
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gitea-runner
+  namespace: gitea
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gitea-runner
+  namespace: gitea
+  labels:
+    app: gitea-runner
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: gitea-runner
+  template:
+    metadata:
+      labels:
+        app: gitea-runner
+    spec:
+      serviceAccountName: gitea-runner
+
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: gitea-runner
+                topologyKey: kubernetes.io/hostname
+
+      containers:
+        - name: runner
+          image: quay.io/podman/stable:latest
+          imagePullPolicy: Always
+
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+
+              # Install act_runner
+              echo "Installing act_runner..."
+              curl -L https://dl.gitea.com/act_runner/latest/act_runner-latest-linux-amd64 -o /usr/local/bin/act_runner
+              chmod +x /usr/local/bin/act_runner
+
+              # Register runner on first startup
+              if [ ! -f /data/.runner ]; then
+                echo "Registering runner..."
+                act_runner register \
+                  --instance "${GITEA_INSTANCE_URL}" \
+                  --token "${GITEA_RUNNER_REGISTRATION_TOKEN}" \
+                  --name "${GITEA_RUNNER_NAME}" \
+                  --labels "ubuntu-latest,ubuntu-22.04,self-hosted" \
+                  --no-interactive
+              fi
+
+              # Start Podman service for rootless operation
+              echo "Starting Podman service..."
+              podman system service --time=0 unix:///tmp/podman.sock &
+
+              # Start runner daemon
+              echo "Starting act_runner daemon..."
+              export DOCKER_HOST=unix:///tmp/podman.sock
+              act_runner daemon
+
+          env:
+            - name: GITEA_INSTANCE_URL
+              value: "http://gitea-http:3000"
+            - name: GITEA_RUNNER_REGISTRATION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: gitea-runner-token
+                  key: token
+            - name: GITEA_RUNNER_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+
+          volumeMounts:
+            - name: runner-data
+              mountPath: /data
+            - name: podman-storage
+              mountPath: /var/lib/containers
+
+          # Rootless Podman - no privileged mode needed!
+          securityContext:
+            runAsNonRoot: false  # Podman handles user namespaces
+            allowPrivilegeEscalation: false
+
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 2
+              memory: 2Gi
+
+      volumes:
+        - name: runner-data
+          emptyDir: {}
+        - name: podman-storage
+          emptyDir: {}
