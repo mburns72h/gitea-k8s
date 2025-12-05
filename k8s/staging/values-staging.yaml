@@ -254,6 +254,8 @@ gitea:
 # Use single PostgreSQL instance (not HA)
 postgresql:
   enabled: true
+  image:
+    tag: 17.2.0-debian-12-r7
   auth:
     username: giteauser
     database: gitea
