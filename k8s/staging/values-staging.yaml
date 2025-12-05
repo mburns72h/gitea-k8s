@@ -119,7 +119,6 @@ gitea:
 
     database:
       DB_TYPE: postgres
-      USER: giteauser
       # Will be overridden by environment variables below
 
     session:
