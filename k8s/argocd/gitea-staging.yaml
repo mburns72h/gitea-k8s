@@ -8,7 +8,7 @@ spec:
   project: default
 
   source:
-    repoURL: ssh://gitea-ssh.home.mburnsfire.net:2222/mburns/gitea-k8s.git
+    repoURL: ssh://git@gitea-ssh.home.mburnsfire.net:2222/mburns/gitea-k8s.git
     targetRevision: main
     path: k8s/staging
     helm:
