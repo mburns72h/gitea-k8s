@@ -7,14 +7,17 @@ metadata:
 spec:
   project: default
 
-  source:
-    repoURL: ssh://git@gitea-ssh.home.mburnsfire.net:2222/mburns/gitea-k8s.git
-    targetRevision: main
-    path: k8s/staging
-    helm:
-      valueFiles:
-        - values-staging.yaml
-      releaseName: gitea-staging
+  sources:
+    - repoURL: https://dl.gitea.com/charts/
+      chart: gitea
+      targetRevision: 10.*
+      helm:
+        releaseName: gitea-staging
+        valueFiles:
+          - $values/k8s/staging/values-staging.yaml
+    - repoURL: ssh://git@gitea-ssh.home.mburnsfire.net:2222/mburns/gitea-k8s.git
+      targetRevision: main
+      ref: values
 
   destination:
     server: https://kubernetes.default.svc
