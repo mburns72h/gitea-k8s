@@ -203,10 +203,7 @@ gitea:
     - name: GITEA__database__NAME
       value: gitea
     - name: GITEA__database__USER
-      valueFrom:
-        secretKeyRef:
-          name: gitea-staging-postgresql
-          key: username
+      value: giteauser
     - name: GITEA__database__PASSWD
       valueFrom:
         secretKeyRef:
