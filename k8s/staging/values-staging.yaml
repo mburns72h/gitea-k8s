@@ -4,11 +4,12 @@
 # Namespace: gitea-staging
 
 # Gitea image configuration
+# Using OpenShift ImageStream for automatic updates (latest version)
 image:
-  registry: docker.io
-  repository: gitea/gitea
-  tag: "1.22"
-  pullPolicy: IfNotPresent
+  registry: image-registry.openshift-image-registry.svc:5000
+  repository: gitea-staging/gitea
+  tag: "latest"
+  pullPolicy: Always
   rootless: true
 
 # Enable HA with 3 replicas
@@ -118,7 +119,7 @@ gitea:
 
     server:
       DISABLE_SSH: false
-      SSH_DOMAIN: gitea-staging-ssh.home.mburnsfire.net
+      SSH_DOMAIN: gitea-ssh-staging.home.mburnsfire.net
       SSH_PORT: 2223
       SSH_LISTEN_PORT: 2222
       ROOT_URL: https://gitea-staging.home.mburnsfire.net/
