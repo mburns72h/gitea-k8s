@@ -71,9 +71,8 @@ persistence:
     - ReadWriteMany
   size: 50Gi
   # Specify your OpenShift storage class that supports RWX
-  # Common options: nfs-client, ocs-storagecluster-cephfs, etc.
-  # Leave blank to use default storage class
-  storageClass: ""
+  # Using same NFS storage class as production
+  storageClass: "nfs-virt-default"
   mountPath: /data
 
 # Gitea application configuration
