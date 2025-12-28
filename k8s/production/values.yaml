@@ -4,11 +4,12 @@
 # Namespace: gitea-prod
 
 # Gitea image configuration
+# Using OpenShift ImageStream for automatic updates
 image:
-  registry: docker.io
+  registry: image-registry.openshift-image-registry.svc:5000
   repository: gitea/gitea
   tag: "1.22"
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
   rootless: true
 
 # Enable HA with 3 replicas

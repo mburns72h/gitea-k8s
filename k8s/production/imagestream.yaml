@@ -1,0 +1,42 @@
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: gitea
+  namespace: gitea
+  annotations:
+    description: "Gitea container image stream with automatic updates"
+spec:
+  lookupPolicy:
+    # Allow pods in this namespace to reference this image stream by name
+    local: true
+  tags:
+    # Track the 1.22.x rootless releases
+    # Note: Tag is "1.22-rootless" to match what Helm chart generates (tag "1.22" + rootless: true)
+    - name: "1.22-rootless"
+      annotations:
+        openshift.io/display-name: "Gitea 1.22 Rootless"
+        description: "Gitea 1.22 rootless stable releases"
+      from:
+        kind: DockerImage
+        name: docker.io/gitea/gitea:1.22-rootless
+      importPolicy:
+        # Automatically import new images on schedule (checks every ~15 minutes)
+        scheduled: true
+        importMode: Legacy
+      referencePolicy:
+        type: Source
+
+    # Optional: Track latest rootless releases
+    - name: "latest-rootless"
+      annotations:
+        openshift.io/display-name: "Gitea Latest Rootless"
+        description: "Latest Gitea rootless release"
+      from:
+        kind: DockerImage
+        name: docker.io/gitea/gitea:latest-rootless
+      importPolicy:
+        scheduled: true
+        importMode: Legacy
+      referencePolicy:
+        type: Source
