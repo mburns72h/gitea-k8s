@@ -8,7 +8,7 @@
 image:
   registry: image-registry.openshift-image-registry.svc:5000
   repository: gitea/gitea
-  tag: "1.22"
+  tag: "stable"
   pullPolicy: Always
   rootless: true
 

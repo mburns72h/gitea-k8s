@@ -11,12 +11,12 @@ spec:
     # Allow pods in this namespace to reference this image stream by name
     local: true
   tags:
-    # Track the 1.22.x rootless releases
-    # Note: Tag is "1.22-rootless" to match what Helm chart generates (tag "1.22" + rootless: true)
-    - name: "1.22-rootless"
+    # Track stable (1.22.x) rootless releases
+    # Note: Tag is "stable-rootless" to match what Helm chart generates (tag "stable" + rootless: true)
+    - name: "stable-rootless"
       annotations:
-        openshift.io/display-name: "Gitea 1.22 Rootless"
-        description: "Gitea 1.22 rootless stable releases"
+        openshift.io/display-name: "Gitea Stable Rootless"
+        description: "Gitea stable (1.22.x) rootless releases"
       from:
         kind: DockerImage
         name: docker.io/gitea/gitea:1.22-rootless
@@ -27,7 +27,7 @@ spec:
       referencePolicy:
         type: Source
 
-    # Optional: Track latest rootless releases
+    # Track latest rootless releases (for staging)
     - name: "latest-rootless"
       annotations:
         openshift.io/display-name: "Gitea Latest Rootless"
