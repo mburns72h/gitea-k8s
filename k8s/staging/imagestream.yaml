@@ -5,24 +5,23 @@ metadata:
   name: gitea
   namespace: gitea-staging
   annotations:
-    description: "Gitea container image stream with automatic updates (latest version)"
+    description: "Gitea container image stream (references production to avoid rate limits)"
 spec:
   lookupPolicy:
     # Allow pods in this namespace to reference this image stream by name
     local: true
   tags:
-    # Track the latest rootless releases
-    # Tag is "latest-rootless" because Helm chart appends "-rootless" when rootless: true
+    # Reference production's stable-rootless tag instead of pulling from Docker Hub
+    # This avoids Docker Hub rate limits by reusing production's cached image
     - name: "latest-rootless"
       annotations:
-        openshift.io/display-name: "Gitea Latest Rootless"
-        description: "Latest Gitea rootless release for staging"
+        openshift.io/display-name: "Gitea Stable Rootless (from production)"
+        description: "References production's stable Gitea image to avoid Docker Hub rate limits"
       from:
-        kind: DockerImage
-        name: docker.io/gitea/gitea:latest-rootless
+        kind: ImageStreamTag
+        name: gitea:stable-rootless
+        namespace: gitea
       importPolicy:
-        # Automatically import new images on schedule (checks every ~15 minutes)
-        scheduled: true
-        importMode: PreserveOriginal
+        importMode: Legacy
       referencePolicy:
         type: Local
