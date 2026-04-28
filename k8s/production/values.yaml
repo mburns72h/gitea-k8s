@@ -3,14 +3,22 @@
 # Chart: gitea-charts/gitea (official Helm chart)
 # Namespace: gitea-prod
 
+# Allow non-standard images (imagestreams)
+global:
+  security:
+    allowInsecureImages: true
+  # Use nfs-default storage class to avoid Synology CSI permission issues
+  storageClass: "nfs-default"
+
 # Gitea image configuration
-# Using OpenShift ImageStream for automatic updates
+# Using OpenShift ImageStream - cached image from old cluster
+# Image tag is already rootless, don't append -rootless suffix
 image:
   registry: image-registry.openshift-image-registry.svc:5000
   repository: gitea/gitea
-  tag: "stable"
-  pullPolicy: Always
-  rootless: true
+  tag: "stable-rootless"
+  pullPolicy: IfNotPresent
+  rootless: false
 
 # Enable HA with 3 replicas
 replicaCount: 3
@@ -71,9 +79,8 @@ persistence:
     - ReadWriteMany
   size: 50Gi
   # Specify your OpenShift storage class that supports RWX
-  # Common options: nfs-client, ocs-storagecluster-cephfs, etc.
-  # Leave blank to use default storage class
-  storageClass: ""
+  # Use nfs-default to avoid Synology CSI permission issues
+  storageClass: "nfs-default"
   mountPath: /data
 
 # Gitea application configuration
@@ -86,10 +93,16 @@ gitea:
     # Check pod logs for the generated password
     existingSecret: ""
 
-  # Skip chown/chmod init (fails on OpenShift restricted SCC)
+  # Skip chown/chmod init (fails on NFS)
   initPreScript: |
     #!/bin/sh
-    echo "Skipping chown on /data (OpenShift restricted SCC)"
+    echo "Skipping chown on /data (NFS doesn't support it)"
+    # Create directories without chown
+    mkdir -p /data/git/.ssh || true
+    chmod 700 /data/git/.ssh || true
+    mkdir -p /data/gitea/conf || true
+    mkdir -p "${GITEA_TEMP}" || true
+    chmod ug+rwx "${GITEA_TEMP}" || true
     exit 0
 
   # Pod anti-affinity to spread replicas across nodes
@@ -115,7 +128,7 @@ gitea:
   config:
     APP_NAME: "Gitea: Git with a cup of tea"
     RUN_MODE: prod
-    RUN_USER: git
+    # RUN_USER: git  # Removed to bypass user check with OpenShift random UIDs
 
     server:
       DISABLE_SSH: false
@@ -216,14 +229,6 @@ gitea:
 
   # Environment variables for database and secrets
   env:
-    # Skip chown/chmod operations (OpenShift compatibility)
-    - name: USER_UID
-      value: "auto"
-    - name: USER_GID
-      value: "auto"
-    - name: GITEA_SKIP_CHOWN
-      value: "true"
-
     # Database configuration
     - name: GITEA__database__DB_TYPE
       value: postgres
@@ -300,6 +305,11 @@ postgresql-ha:
           replicationPasswordKey: repmgr-password
 
   postgresql:
+    # Use imagestream to avoid Docker Hub rate limits
+    image:
+      registry: image-registry.openshift-image-registry.svc:5000
+      repository: gitea/postgresql-repmgr
+      tag: 17.6.0-debian-12-r2
     replicaCount: 3
     # Spread replicas across nodes
     podAntiAffinityPreset: hard
@@ -312,8 +322,8 @@ postgresql-ha:
     persistence:
       enabled: true
       size: 20Gi
-      # Uses OpenShift dynamic provisioning
-      storageClass: ""
+      # Use nfs-default to avoid Synology CSI permission issues
+      storageClass: "nfs-default"
     resources:
       requests:
         cpu: 500m
@@ -326,6 +336,11 @@ postgresql-ha:
       enabled: false
 
   pgpool:
+    # Use imagestream to avoid Docker Hub rate limits
+    image:
+      registry: image-registry.openshift-image-registry.svc:5000
+      repository: gitea/pgpool
+      tag: 4.6.3-debian-12-r0
     replicaCount: 2
     # Spread replicas across nodes
     podAntiAffinityPreset: hard
@@ -346,6 +361,11 @@ postgresql-ha:
 # Enable Redis for session/cache/queue storage (required for HA)
 redis:
   enabled: true
+  # Use imagestream to avoid Docker Hub rate limits
+  image:
+    registry: image-registry.openshift-image-registry.svc:5000
+    repository: gitea/redis
+    tag: 7.2.5-debian-12-r4
   architecture: standalone
   auth:
     enabled: true
@@ -355,7 +375,7 @@ redis:
     persistence:
       enabled: true
       size: 8Gi
-      storageClass: ""
+      storageClass: "nfs-default"
     resources:
       requests:
         cpu: 100m

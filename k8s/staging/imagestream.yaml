@@ -12,17 +12,17 @@ spec:
     local: true
   tags:
     # Track the latest rootless releases
-    # Note: Tag is "latest-rootless" to match what Helm chart generates (tag "latest" + rootless: true)
+    # Tag is "latest-rootless" because Helm chart appends "-rootless" when rootless: true
     - name: "latest-rootless"
       annotations:
         openshift.io/display-name: "Gitea Latest Rootless"
-        description: "Latest Gitea rootless release"
+        description: "Latest Gitea rootless release for staging"
       from:
         kind: DockerImage
         name: docker.io/gitea/gitea:latest-rootless
       importPolicy:
         # Automatically import new images on schedule (checks every ~15 minutes)
         scheduled: true
-        importMode: Legacy
+        importMode: PreserveOriginal
       referencePolicy:
-        type: Source
+        type: Local
