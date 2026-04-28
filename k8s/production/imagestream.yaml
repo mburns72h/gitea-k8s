@@ -25,7 +25,7 @@ spec:
         scheduled: true
         importMode: Legacy
       referencePolicy:
-        type: Source
+        type: Local
 
     # Track latest rootless releases (for staging)
     - name: "latest-rootless"
@@ -39,4 +39,4 @@ spec:
         scheduled: true
         importMode: Legacy
       referencePolicy:
-        type: Source
+        type: Local

@@ -1,0 +1,21 @@
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: pgpool
+  namespace: gitea
+  labels:
+    app: gitea
+spec:
+  lookupPolicy:
+    local: true
+  tags:
+    - name: "4.6.3-debian-12-r0"
+      from:
+        kind: DockerImage
+        name: docker.io/bitnamilegacy/pgpool:4.6.3-debian-12-r0
+      importPolicy:
+        scheduled: true
+        importMode: Legacy
+      referencePolicy:
+        type: Local
