@@ -1,2 +1,2 @@
-k8s/production/secrets.yaml
-k8s/staging/secrets.yaml
+production/secrets.yaml
+staging/secrets.yaml

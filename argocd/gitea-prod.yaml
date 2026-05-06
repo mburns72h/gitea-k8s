@@ -14,7 +14,7 @@ spec:
       helm:
         releaseName: gitea
         valueFiles:
-          - $values/k8s/production/values.yaml
+          - $values/production/values.yaml
     - repoURL: ssh://git@gitea-ssh.home.mburnsfire.net:2222/mburns/gitea-k8s.git
       targetRevision: main
       ref: values

@@ -1,26 +1,15 @@
-# Gitea Staging Deployment on OpenShift
-# Same configuration as production for testing
-# Chart: gitea-charts/gitea (official Helm chart)
-# Namespace: gitea-staging
-
-# Gitea image configuration
-# Temporarily using production namespace's cached image (workaround for rate limits)
-# TODO: Fix ImageStreams to use Local referencePolicy instead of Source
 image:
   registry: image-registry.openshift-image-registry.svc:5000
-  repository: gitea/gitea
-  tag: "stable-rootless"
+  repository: gitea-staging/gitea
+  tag: "1.25-rootless"
   pullPolicy: IfNotPresent
-  rootless: false  # Tag already includes -rootless, don't append again
+  rootless: true
 
-# Enable HA with 3 replicas
-replicaCount: 3
+replicaCount: 1
 
-# Use RollingUpdate strategy for zero-downtime updates
 strategy:
-  type: "RollingUpdate"
+  type: "Recreate"
 
-# Service configuration
 service:
   http:
     type: ClusterIP
@@ -31,12 +20,9 @@ service:
     port: 2222
     nodePort: 32223
 
-# Disable default ingress (using OpenShift Route instead)
 ingress:
   enabled: false
 
-# OpenShift-friendly security context overrides
-# Avoid forcing fixed UIDs/GIDs so SCC 'restricted' can assign a random UID
 podSecurityContext:
   runAsNonRoot: true
   seccompProfile:
@@ -63,34 +49,22 @@ initContainerSecurityContext:
     drop:
       - ALL
 
-# Persistence configuration - using OpenShift dynamic storage
 persistence:
   enabled: true
-  # Let OpenShift create a PVC dynamically
-  # Gitea requires RWX (ReadWriteMany) for multi-replica deployments
   accessModes:
     - ReadWriteMany
-  size: 50Gi
-  # Specify your OpenShift storage class that supports RWX
-  # Using same NFS storage class as production
+  size: 10Gi
   storageClass: "nfs-default"
   mountPath: /data
 
-# Gitea application configuration
 gitea:
-  # Admin user will be created on first startup
   admin:
     username: "gitea_admin"
     email: "mburns72h+gitea-staging@gmail.com"
-    # Password will be auto-generated on first startup if not set
-    # Check pod logs for the generated password
-    existingSecret: ""
+    existingSecret: "gitea-staging-admin"
 
-  # Skip chown/chmod init (fails on OpenShift restricted SCC and NFS)
   initPreScript: |
     #!/bin/sh
-    echo "Skipping chown on /data (NFS doesn't support it)"
-    # Create directories without chown
     mkdir -p /data/git/.ssh || true
     chmod 700 /data/git/.ssh || true
     mkdir -p /data/gitea/conf || true
@@ -98,15 +72,11 @@ gitea:
     chmod ug+rwx "${GITEA_TEMP}" || true
     exit 0
 
-  # Pod anti-affinity to spread replicas across nodes
-  podAnnotations: {}
-
   livenessProbe:
     enabled: true
     initialDelaySeconds: 200
     periodSeconds: 10
     timeoutSeconds: 1
-    successThreshold: 1
     failureThreshold: 10
 
   readinessProbe:
@@ -114,14 +84,11 @@ gitea:
     initialDelaySeconds: 5
     periodSeconds: 10
     timeoutSeconds: 1
-    successThreshold: 1
     failureThreshold: 3
 
-  # Gitea configuration (app.ini)
   config:
-    APP_NAME: "Gitea: Git with a cup of tea"
+    APP_NAME: "Gitea Staging"
     RUN_MODE: prod
-    # RUN_USER removed - causes init failures on OpenShift with random UIDs
 
     server:
       DISABLE_SSH: false
@@ -134,26 +101,18 @@ gitea:
 
     database:
       DB_TYPE: postgres
-      # Will be overridden by environment variables below
 
     session:
-      # Use Redis for sessions (required for HA)
       PROVIDER: redis
-      PROVIDER_CONFIG: redis://:REDIS_PASSWORD@gitea-staging-redis-master:6379/0?pool_size=100&idle_timeout=180s
-      # Session settings for HA
       COOKIE_SECURE: true
       COOKIE_NAME: gitea_staging_session
 
     cache:
-      # Use Redis for cache (required for HA)
       ENABLED: true
       ADAPTER: redis
-      HOST: redis://:REDIS_PASSWORD@gitea-staging-redis-master:6379/1?pool_size=100&idle_timeout=180s
 
     queue:
-      # Use Redis for queues (recommended for HA)
       TYPE: redis
-      CONN_STR: redis://:REDIS_PASSWORD@gitea-staging-redis-master:6379/2?pool_size=100&idle_timeout=180s
 
     security:
       INSTALL_LOCK: true
@@ -162,17 +121,15 @@ gitea:
       PASSWORD_HASH_ALGO: pbkdf2
 
     service:
-      DISABLE_REGISTRATION: false
-      REQUIRE_SIGNIN_VIEW: false
+      DISABLE_REGISTRATION: true
+      REQUIRE_SIGNIN_VIEW: true
       REGISTER_EMAIL_CONFIRM: false
       ENABLE_NOTIFY_MAIL: true
-      DEFAULT_KEEP_EMAIL_PRIVATE: false
       DEFAULT_ALLOW_CREATE_ORGANIZATION: true
       DEFAULT_ENABLE_TIMETRACKING: true
 
     mailer:
       ENABLED: true
-      # Use internal OpenShift SMTP relay service
       SMTP_ADDR: smtp-relay.smtp-relay.svc.cluster.local
       SMTP_PORT: 25
       PROTOCOL: smtp
@@ -190,39 +147,19 @@ gitea:
       ALLOWED_HOST_LIST: private
       SKIP_TLS_VERIFY: true
 
-    repository.pull-request:
-      DEFAULT_MERGE_STYLE: merge
-
-    repository.signing:
-      DEFAULT_TRUST_MODEL: committer
-
-    # Enable Gitea Actions for CI/CD
     actions:
       ENABLED: true
       DEFAULT_ACTIONS_URL: https://github.com
 
-    # Storage configuration for artifacts
     storage:
       STORAGE_TYPE: local
 
-    # OAuth2 configuration
     "oauth2_client":
       ENABLE_AUTO_REGISTRATION: true
       ACCOUNT_LINKING: login
       UPDATE_AVATAR: true
 
-    # Authentik OAuth provider (staging)
-    "oauth2_client.authentik":
-      PROVIDER: openidConnect
-      CLIENT_ID: CHANGE_ME_AFTER_CREATING_IN_AUTHENTIK_STAGING
-      CLIENT_SECRET: CHANGE_ME_AFTER_CREATING_IN_AUTHENTIK_STAGING
-      AUTO_DISCOVER_URL: https://auth-stage.home.mburnsfire.net/application/o/gitea-staging/.well-known/openid-configuration
-      ICON_URL: https://goauthentik.io/img/icon.png
-      SCOPES: openid email profile
-
-  # Environment variables for database and secrets
   env:
-    # Skip chown/chmod operations (OpenShift compatibility and NFS)
     - name: USER_UID
       value: "auto"
     - name: USER_GID
@@ -230,9 +167,7 @@ gitea:
     - name: GITEA_SKIP_CHOWN
       value: "true"
 
-    # Database configuration
-    - name: GITEA__database__DB_TYPE
-      value: postgres
+    # Database
     - name: GITEA__database__HOST
       value: gitea-staging-postgresql:5432
     - name: GITEA__database__NAME
@@ -253,7 +188,7 @@ gitea:
     - name: GITEA__database__SSL_MODE
       value: disable
 
-    # Gitea secrets
+    # Gitea internal secrets
     - name: GITEA__security__INTERNAL_TOKEN
       valueFrom:
         secretKeyRef:
@@ -275,12 +210,42 @@ gitea:
           name: gitea-staging-secrets
           key: oauth2_jwt_secret
 
-    # Redis password for session/cache/queue
-    - name: REDIS_PASSWORD
+    # Redis connection (full URL with password injected at runtime)
+    - name: GITEA__session__PROVIDER_CONFIG
       valueFrom:
         secretKeyRef:
-          name: gitea-staging-redis
-          key: redis-password
+          name: gitea-staging-secrets
+          key: redis_session_url
+    - name: GITEA__cache__HOST
+      valueFrom:
+        secretKeyRef:
+          name: gitea-staging-secrets
+          key: redis_cache_url
+    - name: GITEA__queue__CONN_STR
+      valueFrom:
+        secretKeyRef:
+          name: gitea-staging-secrets
+          key: redis_queue_url
+
+    # Authentik OAuth2
+    - name: GITEA__oauth2_client.authentik__CLIENT_ID
+      valueFrom:
+        secretKeyRef:
+          name: gitea-staging-secrets
+          key: authentik_client_id
+    - name: GITEA__oauth2_client.authentik__CLIENT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: gitea-staging-secrets
+          key: authentik_client_secret
+    - name: GITEA__oauth2_client.authentik__AUTO_DISCOVER_URL
+      value: "https://auth-stage.home.mburnsfire.net/application/o/gitea-staging/.well-known/openid-configuration"
+    - name: GITEA__oauth2_client.authentik__PROVIDER
+      value: "openidConnect"
+    - name: GITEA__oauth2_client.authentik__ICON_URL
+      value: "https://goauthentik.io/img/icon.png"
+    - name: GITEA__oauth2_client.authentik__SCOPES
+      value: "openid email profile"
 
   resources:
     requests:
@@ -290,78 +255,51 @@ gitea:
       cpu: 2
       memory: 2Gi
 
-# Enable single PostgreSQL instance (non-HA for staging)
 postgresql:
   enabled: true
   auth:
     username: gitea
     database: gitea
-    # Password will be auto-generated and stored in gitea-staging-postgresql secret
+    existingSecret: gitea-staging-postgresql
+    secretKeys:
+      adminPasswordKey: postgres-password
+      userPasswordKey: password
   primary:
     persistence:
       enabled: true
-      size: 20Gi
+      size: 10Gi
       storageClass: "nfs-default"
-    resources:
-      requests:
-        cpu: 500m
-        memory: 1Gi
-      limits:
-        cpu: 2
-        memory: 2Gi
-    # OpenShift compatibility
     podSecurityContext:
       enabled: false
     containerSecurityContext:
       enabled: false
 
-# Disable PostgreSQL HA cluster (using single instance for staging)
 postgresql-ha:
   enabled: false
 
-# Enable Redis for session/cache/queue storage (required for HA)
 redis:
   enabled: true
   architecture: standalone
   auth:
     enabled: true
-    existingSecret: gitea-staging-redis
-    existingSecretPasswordKey: redis-password
-  # Use production's cached Redis image to avoid Docker Hub rate limits
+    existingSecret: gitea-staging-secrets
+    existingSecretPasswordKey: redis_password
   image:
     registry: image-registry.openshift-image-registry.svc:5000
-    repository: gitea/redis
-    tag: 7.2.5-debian-12-r4
+    repository: gitea-staging/redis
+    tag: "7"
   master:
     persistence:
       enabled: true
-      size: 8Gi
+      size: 2Gi
       storageClass: "nfs-default"
-    resources:
-      requests:
-        cpu: 100m
-        memory: 128Mi
-      limits:
-        cpu: 500m
-        memory: 512Mi
-    # OpenShift compatibility
     podSecurityContext:
       enabled: false
     containerSecurityContext:
       enabled: false
 
-# Disable redis-cluster (Gitea chart uses valkey-cluster instead)
 redis-cluster:
   enabled: false
 
-# Enable valkey-cluster for session/cache/queue (required for Gitea)
 valkey-cluster:
-  enabled: true
-  # OpenShift compatibility - disable pod security contexts
-  podSecurityContext:
-    enabled: false
-  containerSecurityContext:
-    enabled: false
-  # Use nfs-default storage for staging
-  persistence:
-    storageClass: "nfs-default"
+  enabled: false
