@@ -25,11 +25,6 @@ ingress:
 
 podSecurityContext:
   runAsNonRoot: true
-  seccompProfile:
-    type: RuntimeDefault
-  fsGroup: null
-  runAsUser: null
-  runAsGroup: null
 
 containerSecurityContext:
   allowPrivilegeEscalation: false
