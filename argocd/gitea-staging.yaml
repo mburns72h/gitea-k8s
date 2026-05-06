@@ -4,18 +4,26 @@ kind: Application
 metadata:
   name: gitea-staging
   namespace: openshift-gitops
+  labels:
+    app.kubernetes.io/name: gitea
+    app.kubernetes.io/component: argocd-application
+    app.kubernetes.io/part-of: gitea
+    environment: staging
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
 
   sources:
     - repoURL: https://dl.gitea.com/charts/
       chart: gitea
-      targetRevision: 12.4.0
+      targetRevision: 12.5.0
       helm:
         releaseName: gitea-staging
         valueFiles:
-          - $values/k8s/staging/values-staging.yaml
-    - repoURL: ssh://git@gitea-ssh.home.mburnsfire.net:2222/mburns/gitea-k8s.git
+          - $values/staging/values.yaml
+
+    - repoURL: https://gitea.home.mburnsfire.net/homelab/gitea-k8s.git
       targetRevision: main
       ref: values
 
@@ -38,9 +46,12 @@ spec:
         factor: 2
         maxDuration: 3m
 
-  # Health assessment for Gitea components
   ignoreDifferences:
     - group: apps
       kind: Deployment
+      jsonPointers:
+        - /spec/replicas
+    - group: apps
+      kind: StatefulSet
       jsonPointers:
         - /spec/replicas
