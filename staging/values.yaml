@@ -34,20 +34,19 @@ podSecurityContext:
 containerSecurityContext:
   allowPrivilegeEscalation: false
   runAsNonRoot: true
-  runAsUser: null
-  runAsGroup: null
   capabilities:
     drop:
       - ALL
 
-initContainerSecurityContext:
-  allowPrivilegeEscalation: false
-  runAsNonRoot: true
-  runAsUser: 1000
-  runAsGroup: 1000
-  capabilities:
-    drop:
-      - ALL
+
+initPreScript: |
+  #!/bin/sh
+  mkdir -p /data/git/.ssh || true
+  chmod 700 /data/git/.ssh || true
+  mkdir -p /data/gitea/conf || true
+  mkdir -p "${GITEA_TEMP}" || true
+  chmod ug+rwx "${GITEA_TEMP}" || true
+  exit 0
 
 persistence:
   enabled: true
@@ -62,15 +61,6 @@ gitea:
     username: "gitea_admin"
     email: "mburns72h+gitea-staging@gmail.com"
     existingSecret: "gitea-staging-admin"
-
-  initPreScript: |
-    #!/bin/sh
-    mkdir -p /data/git/.ssh || true
-    chmod 700 /data/git/.ssh || true
-    mkdir -p /data/gitea/conf || true
-    mkdir -p "${GITEA_TEMP}" || true
-    chmod ug+rwx "${GITEA_TEMP}" || true
-    exit 0
 
   livenessProbe:
     enabled: true
