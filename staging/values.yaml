@@ -144,13 +144,7 @@ gitea:
       ACCOUNT_LINKING: login
       UPDATE_AVATAR: true
 
-    "oauth2_client.authentik":
-      PROVIDER: openidConnect
-      CLIENT_ID: PLACEHOLDER
-      CLIENT_SECRET: PLACEHOLDER
-      AUTO_DISCOVER_URL: "https://auth-stage.home.mburnsfire.net/application/o/gitea-staging/.well-known/openid-configuration"
-      ICON_URL: "https://goauthentik.io/img/icon.png"
-      SCOPES: "openid email profile"
+    # oauth2_client.authentik: add once the Authentik staging provider is created
 
 deployment:
   env:
