@@ -57,6 +57,17 @@ gitea:
     email: "mburns72h+gitea-staging@gmail.com"
     existingSecret: "gitea-staging-admin"
 
+  oauth:
+    - name: authentik
+      provider: openidConnect
+      key: PLACEHOLDER
+      secret: PLACEHOLDER
+      autoDiscoverUrl: "https://auth-stage.home.mburnsfire.net/application/o/gitea-staging/.well-known/openid-configuration"
+      iconUrl: "https://goauthentik.io/img/icon.png"
+      scopes: "openid email profile"
+      adminGroup: ""
+      restrictedGroup: ""
+
   livenessProbe:
     enabled: true
     initialDelaySeconds: 200
@@ -213,25 +224,8 @@ deployment:
           name: gitea-staging-secrets
           key: redis_queue_url
 
-    # Authentik OAuth2
-    - name: GITEA__oauth2_client.authentik__CLIENT_ID
-      valueFrom:
-        secretKeyRef:
-          name: gitea-staging-secrets
-          key: authentik_client_id
-    - name: GITEA__oauth2_client.authentik__CLIENT_SECRET
-      valueFrom:
-        secretKeyRef:
-          name: gitea-staging-secrets
-          key: authentik_client_secret
-    - name: GITEA__oauth2_client.authentik__AUTO_DISCOVER_URL
-      value: "https://auth-stage.home.mburnsfire.net/application/o/gitea-staging/.well-known/openid-configuration"
-    - name: GITEA__oauth2_client.authentik__PROVIDER
-      value: "openidConnect"
-    - name: GITEA__oauth2_client.authentik__ICON_URL
-      value: "https://goauthentik.io/img/icon.png"
-    - name: GITEA__oauth2_client.authentik__SCOPES
-      value: "openid email profile"
+    # Note: Authentik OAuth2 cannot be configured via env vars due to dots in
+    # section names being invalid bash identifiers. Use gitea.oauth instead.
 
   resources:
     requests:
