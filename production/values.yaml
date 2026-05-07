@@ -46,11 +46,6 @@ ingress:
 # Avoid forcing fixed UIDs/GIDs so SCC 'restricted' can assign a random UID
 podSecurityContext:
   runAsNonRoot: true
-  seccompProfile:
-    type: RuntimeDefault
-  fsGroup: null
-  runAsUser: null
-  runAsGroup: null
 
 containerSecurityContext:
   allowPrivilegeEscalation: false
