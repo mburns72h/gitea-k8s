@@ -57,17 +57,6 @@ gitea:
     email: "mburns72h+gitea-staging@gmail.com"
     existingSecret: "gitea-staging-admin"
 
-  oauth:
-    - name: authentik
-      provider: openidConnect
-      key: PLACEHOLDER
-      secret: PLACEHOLDER
-      autoDiscoverUrl: "https://auth-stage.home.mburnsfire.net/application/o/gitea-staging/.well-known/openid-configuration"
-      iconUrl: "https://goauthentik.io/img/icon.png"
-      scopes: "openid email profile"
-      adminGroup: ""
-      restrictedGroup: ""
-
   livenessProbe:
     enabled: true
     initialDelaySeconds: 200
@@ -154,6 +143,14 @@ gitea:
       ENABLE_AUTO_REGISTRATION: true
       ACCOUNT_LINKING: login
       UPDATE_AVATAR: true
+
+    "oauth2_client.authentik":
+      PROVIDER: openidConnect
+      CLIENT_ID: PLACEHOLDER
+      CLIENT_SECRET: PLACEHOLDER
+      AUTO_DISCOVER_URL: "https://auth-stage.home.mburnsfire.net/application/o/gitea-staging/.well-known/openid-configuration"
+      ICON_URL: "https://goauthentik.io/img/icon.png"
+      SCOPES: "openid email profile"
 
 deployment:
   env:
