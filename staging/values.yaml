@@ -144,6 +144,7 @@ gitea:
       ACCOUNT_LINKING: login
       UPDATE_AVATAR: true
 
+deployment:
   env:
     - name: USER_UID
       value: "auto"
