@@ -219,10 +219,10 @@ gitea:
       UPDATE_AVATAR: true
 
     # Authentik OAuth provider
+    # CLIENT_ID and CLIENT_SECRET are managed via helm upgrade with a separate
+    # git-ignored values file (production/values-secrets.yaml) - not stored in git
     "oauth2_client.authentik":
       PROVIDER: openidConnect
-      CLIENT_ID: YlJREEC2wZxJpx6X1BEYRchNmNFRhszpWCDDZv65
-      CLIENT_SECRET: TOVYvlQH0I1cXhPq531pp1XGUesV8Nm6i4FKTyjFnTYT0DrQq1LRPhF6lOjYw26wEYFNBvf4x7L6dRFG5d2mmzN3ccZju631mbwRB9yh6hR8RUiBz5BRgtoXUZDubguf
       AUTO_DISCOVER_URL: https://auth.home.mburnsfire.net/application/o/gitea/.well-known/openid-configuration
       ICON_URL: https://goauthentik.io/img/icon.png
       SCOPES: openid email profile

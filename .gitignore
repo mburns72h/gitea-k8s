@@ -1,2 +1,4 @@
 production/secrets.yaml
+production/values-secrets.yaml
 staging/secrets.yaml
+staging/values-secrets.yaml
