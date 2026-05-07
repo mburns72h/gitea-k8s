@@ -190,7 +190,7 @@ gitea:
       ENABLE_OPENID_SIGNUP: false
 
     migrations:
-      ALLOWED_DOMAINS: "*.home.mburnsfire.net"
+      ALLOWED_DOMAINS: "*.home.mburnsfire.net,github.com,gitlab.com"
       ALLOW_LOCALNETWORKS: true
 
     webhook:
