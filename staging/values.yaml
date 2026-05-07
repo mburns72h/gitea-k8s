@@ -248,18 +248,14 @@ postgresql:
 postgresql-ha:
   enabled: false
 
-redis:
+valkey:
   enabled: true
   architecture: standalone
   auth:
     enabled: true
     existingSecret: gitea-staging-secrets
     existingSecretPasswordKey: redis_password
-  image:
-    registry: image-registry.openshift-image-registry.svc:5000
-    repository: gitea-staging/redis
-    tag: "7"
-  master:
+  primary:
     persistence:
       enabled: true
       size: 2Gi
