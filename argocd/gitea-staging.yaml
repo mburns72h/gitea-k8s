@@ -55,3 +55,9 @@ spec:
       kind: StatefulSet
       jsonPointers:
         - /spec/replicas
+    - group: ""
+      kind: Secret
+      name: gitea-staging
+      namespace: gitea-staging
+      jsonPointers:
+        - /data/config_environment.sh
