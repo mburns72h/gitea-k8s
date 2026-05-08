@@ -2,7 +2,7 @@ image:
   registry: image-registry.openshift-image-registry.svc:5000
   repository: gitea-staging/gitea
   tag: "latest-rootless"
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
   rootless: false  # tag already includes -rootless suffix
 
 replicaCount: 1
