@@ -42,8 +42,15 @@ service:
 ingress:
   enabled: false
 
-# OpenShift-friendly security context overrides
-# Avoid forcing fixed UIDs/GIDs so SCC 'restricted' can assign a random UID
+initPreScript: |
+  #!/bin/sh
+  mkdir -p /data/git/.ssh || true
+  chmod 700 /data/git/.ssh || true
+  mkdir -p /data/gitea/conf || true
+  mkdir -p "${GITEA_TEMP}" || true
+  chmod ug+rwx "${GITEA_TEMP}" || true
+  exit 0
+
 podSecurityContext:
   runAsNonRoot: true
 
@@ -56,14 +63,6 @@ containerSecurityContext:
     drop:
       - ALL
 
-initContainerSecurityContext:
-  allowPrivilegeEscalation: false
-  runAsNonRoot: true
-  runAsUser: null
-  runAsGroup: null
-  capabilities:
-    drop:
-      - ALL
 
 # Persistence configuration - using OpenShift dynamic storage
 persistence:
@@ -88,17 +87,6 @@ gitea:
     # Check pod logs for the generated password
     existingSecret: ""
 
-  # Skip chown/chmod init (fails on NFS)
-  initPreScript: |
-    #!/bin/sh
-    echo "Skipping chown on /data (NFS doesn't support it)"
-    # Create directories without chown
-    mkdir -p /data/git/.ssh || true
-    chmod 700 /data/git/.ssh || true
-    mkdir -p /data/gitea/conf || true
-    mkdir -p "${GITEA_TEMP}" || true
-    chmod ug+rwx "${GITEA_TEMP}" || true
-    exit 0
 
   # Pod anti-affinity to spread replicas across nodes
   podAnnotations: {}
@@ -127,6 +115,7 @@ gitea:
 
     server:
       DISABLE_SSH: false
+      START_SSH_SERVER: true
       SSH_DOMAIN: gitea-ssh.home.mburnsfire.net
       SSH_PORT: 2222
       SSH_LISTEN_PORT: 2222
@@ -222,6 +211,7 @@ gitea:
       ICON_URL: https://goauthentik.io/img/icon.png
       SCOPES: openid email profile
 
+deployment:
   # Environment variables for database and secrets
   env:
     # Database configuration
@@ -310,19 +300,9 @@ postgresql-ha:
     podAntiAffinityPreset: hard
     # OpenShift compatibility - allow SCC to assign dynamic UIDs/GIDs
     podSecurityContext:
-      enabled: true
-      fsGroup: null  # Let OpenShift SCC assign dynamically
-      runAsNonRoot: true
-      seccompProfile:
-        type: RuntimeDefault
+      enabled: false
     containerSecurityContext:
-      enabled: true
-      runAsNonRoot: true
-      allowPrivilegeEscalation: false
-      runAsUser: null  # Let OpenShift SCC assign dynamically
-      capabilities:
-        drop:
-          - ALL
+      enabled: false
     # Storage for each PostgreSQL instance
     persistence:
       enabled: true
