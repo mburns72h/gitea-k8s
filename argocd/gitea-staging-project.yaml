@@ -1,0 +1,24 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: gitea-staging
+  namespace: openshift-gitops
+spec:
+  description: Gitea staging - restricted to gitea-staging namespace only
+
+  sourceRepos:
+    - https://dl.gitea.com/charts/
+    - https://gitea.home.mburnsfire.net/homelab/gitea-k8s.git
+
+  destinations:
+    - namespace: gitea-staging
+      server: https://kubernetes.default.svc
+
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
