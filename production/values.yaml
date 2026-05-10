@@ -211,7 +211,6 @@ gitea:
       ICON_URL: https://goauthentik.io/img/icon.png
       SCOPES: openid email profile
 
-deployment:
   # Environment variables for database and secrets
   env:
     # Database configuration
