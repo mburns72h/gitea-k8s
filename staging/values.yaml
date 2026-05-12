@@ -14,6 +14,10 @@ strategy:
 openshift:
   enabled: true
 
+serviceAccount:
+  create: true
+  name: gitea-staging
+
 service:
   http:
     type: ClusterIP

@@ -27,6 +27,12 @@ spec:
       targetRevision: main
       ref: values
 
+    - repoURL: https://gitea.home.mburnsfire.net/homelab/gitea-k8s.git
+      targetRevision: main
+      path: staging
+      directory:
+        include: "{imagestream.yaml,rbac.yaml}"
+
   destination:
     server: https://kubernetes.default.svc
     namespace: gitea-staging
