@@ -139,6 +139,10 @@ gitea:
 
 deployment:
   env:
+    # Required for NFS storage — prevents init container from attempting chown
+    - name: GITEA_SKIP_CHOWN
+      value: "true"
+
     # Database
     - name: GITEA__database__HOST
       value: gitea-staging-postgresql:5432
