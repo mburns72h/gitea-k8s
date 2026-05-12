@@ -1,0 +1,21 @@
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: gitea
+  namespace: gitea-staging
+  labels:
+    app: gitea-staging
+spec:
+  lookupPolicy:
+    local: true
+  tags:
+    - name: "latest-rootless"
+      from:
+        kind: DockerImage
+        name: docker.io/gitea/gitea:latest-rootless
+      importPolicy:
+        scheduled: true
+        importMode: Legacy
+      referencePolicy:
+        type: Local
