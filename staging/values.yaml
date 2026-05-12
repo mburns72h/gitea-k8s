@@ -3,12 +3,16 @@ image:
   repository: gitea-staging/gitea
   tag: "latest-rootless"
   pullPolicy: Always
-  rootless: false  # tag already includes -rootless suffix
+  rootless: false
 
 replicaCount: 1
 
 strategy:
   type: "Recreate"
+
+# OpenShift compatibility — chart applies restricted SCC defaults automatically
+openshift:
+  enabled: true
 
 service:
   http:
@@ -22,26 +26,6 @@ service:
 
 ingress:
   enabled: false
-
-podSecurityContext:
-  runAsNonRoot: true
-
-containerSecurityContext:
-  allowPrivilegeEscalation: false
-  runAsNonRoot: true
-  capabilities:
-    drop:
-      - ALL
-
-
-initPreScript: |
-  #!/bin/sh
-  mkdir -p /data/git/.ssh || true
-  chmod 700 /data/git/.ssh || true
-  mkdir -p /data/gitea/conf || true
-  mkdir -p "${GITEA_TEMP}" || true
-  chmod ug+rwx "${GITEA_TEMP}" || true
-  exit 0
 
 persistence:
   enabled: true
@@ -145,17 +129,16 @@ gitea:
       ACCOUNT_LINKING: login
       UPDATE_AVATAR: true
 
-    # oauth2_client.authentik: add once the Authentik staging provider is created
+    # Authentik staging OAuth provider
+    # CLIENT_ID and CLIENT_SECRET are in git-ignored staging/values-secrets.yaml
+    "oauth2_client.authentik":
+      PROVIDER: openidConnect
+      AUTO_DISCOVER_URL: https://auth-stage.home.mburnsfire.net/application/o/gitea-staging/.well-known/openid-configuration
+      ICON_URL: https://goauthentik.io/img/icon.png
+      SCOPES: openid email profile
 
 deployment:
   env:
-    - name: USER_UID
-      value: "auto"
-    - name: USER_GID
-      value: "auto"
-    - name: GITEA_SKIP_CHOWN
-      value: "true"
-
     # Database
     - name: GITEA__database__HOST
       value: gitea-staging-postgresql:5432
@@ -199,7 +182,7 @@ deployment:
           name: gitea-staging-secrets
           key: oauth2_jwt_secret
 
-    # Redis connection (full URL with password injected at runtime)
+    # Redis connection
     - name: GITEA__session__PROVIDER_CONFIG
       valueFrom:
         secretKeyRef:
@@ -216,8 +199,8 @@ deployment:
           name: gitea-staging-secrets
           key: redis_queue_url
 
-    # Note: Authentik OAuth2 cannot be configured via env vars due to dots in
-    # section names being invalid bash identifiers. Use gitea.oauth instead.
+    # Authentik OAuth credentials (CLIENT_ID and CLIENT_SECRET)
+    # These come from the values-secrets.yaml file applied separately
 
   resources:
     requests:
