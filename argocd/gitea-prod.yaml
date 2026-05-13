@@ -51,6 +51,11 @@ spec:
         maxDuration: 3m
 
   ignoreDifferences:
+    - group: ""
+      kind: PersistentVolumeClaim
+      name: gitea-shared-storage
+      jqPathExpressions:
+        - '.metadata.labels["app.kubernetes.io/managed-by"]'
     - group: apps
       kind: Deployment
       jsonPointers:
