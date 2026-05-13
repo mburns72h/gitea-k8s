@@ -59,6 +59,14 @@ gitea:
     timeoutSeconds: 1
     failureThreshold: 3
 
+  initPreScript: |
+    #!/usr/bin/env bash
+    TARGET_SCRIPT="/env/config_environment.sh"
+    if [ -f "$TARGET_SCRIPT" ]; then
+      echo "Patching environment-to-ini flags in config_environment.sh..."
+      sed -i 's/environment-to-ini -o/environment-to-ini --out/g' "$TARGET_SCRIPT"
+    fi
+
   config:
     APP_NAME: "Gitea Staging"
     RUN_MODE: prod
