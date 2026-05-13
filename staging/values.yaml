@@ -59,13 +59,11 @@ gitea:
     timeoutSeconds: 1
     failureThreshold: 3
 
-  initPreScript: |
-    #!/usr/bin/env bash
-    TARGET_SCRIPT="/env/config_environment.sh"
-    if [ -f "$TARGET_SCRIPT" ]; then
-      echo "Patching environment-to-ini flags in config_environment.sh..."
-      sed -i 's/environment-to-ini -o/environment-to-ini --out/g' "$TARGET_SCRIPT"
-    fi
+  # Note: The initPreScript cannot patch config_environment.sh because it runs
+  # in configure-gitea AFTER init-app-ini. The fix is applied by patching the
+  # gitea-staging Secret's config_environment.sh key directly, with ignoreDifferences
+  # protecting it from selfHeal. The correct gitea 1.26 command is:
+  # gitea config edit-ini --apply-env --out $GITEA_APP_INI
 
   config:
     APP_NAME: "Gitea Staging"
