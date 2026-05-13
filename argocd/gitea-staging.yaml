@@ -55,8 +55,8 @@ spec:
 
   ignoreDifferences:
     - group: ""
-      kind: ConfigMap
-      name: gitea-staging-init
+      kind: Secret
+      name: gitea-staging
       jqPathExpressions:
         - '.data["config_environment.sh"]'
     - group: apps
