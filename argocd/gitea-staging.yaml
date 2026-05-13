@@ -45,6 +45,7 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ApplyOutOfSyncOnly=true
+      - RespectIgnoreDifferences=true
     retry:
       limit: 5
       backoff:
@@ -53,6 +54,11 @@ spec:
         maxDuration: 3m
 
   ignoreDifferences:
+    - group: ""
+      kind: ConfigMap
+      name: gitea-staging-init
+      jqPathExpressions:
+        - '.data["config_environment.sh"]'
     - group: apps
       kind: Deployment
       jsonPointers:
