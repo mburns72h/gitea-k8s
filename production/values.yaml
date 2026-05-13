@@ -50,11 +50,9 @@ service:
 ingress:
   enabled: false
 
-  # Note: config_environment.sh in the gitea Secret must be patched after first sync
-  # to replace 'environment-to-ini -o' with 'gitea config edit-ini --apply-env --out'
-  # for gitea 1.26 compatibility. ignoreDifferences protects it from selfHeal.
-  chmod ug+rwx "${GITEA_TEMP}" || true
-  exit 0
+# Note: config_environment.sh in the gitea Secret must be patched after first sync
+# to replace 'environment-to-ini -o' with 'gitea config edit-ini --apply-env --out'
+# for gitea 1.26 compatibility. ignoreDifferences protects it from selfHeal.
 
 podSecurityContext:
   runAsNonRoot: true
