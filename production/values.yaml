@@ -16,9 +16,9 @@ global:
 image:
   registry: image-registry.openshift-image-registry.svc:5000
   repository: gitea/gitea
-  tag: "stable-rootless"
+  tag: "stable"
   pullPolicy: IfNotPresent
-  rootless: false
+  rootless: true
 
 # Enable HA with 3 replicas
 replicaCount: 3
@@ -26,6 +26,14 @@ replicaCount: 3
 # Use RollingUpdate strategy for zero-downtime updates
 strategy:
   type: "RollingUpdate"
+
+# OpenShift compatibility — chart handles restricted SCC security contexts natively
+openshift:
+  enabled: true
+
+serviceAccount:
+  create: true
+  name: gitea
 
 # Service configuration
 service:
@@ -42,12 +50,9 @@ service:
 ingress:
   enabled: false
 
-initPreScript: |
-  #!/bin/sh
-  mkdir -p /data/git/.ssh || true
-  chmod 700 /data/git/.ssh || true
-  mkdir -p /data/gitea/conf || true
-  mkdir -p "${GITEA_TEMP}" || true
+  # Note: config_environment.sh in the gitea Secret must be patched after first sync
+  # to replace 'environment-to-ini -o' with 'gitea config edit-ini --apply-env --out'
+  # for gitea 1.26 compatibility. ignoreDifferences protects it from selfHeal.
   chmod ug+rwx "${GITEA_TEMP}" || true
   exit 0
 

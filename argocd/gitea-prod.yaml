@@ -17,7 +17,7 @@ spec:
   sources:
     - repoURL: https://dl.gitea.com/charts/
       chart: gitea
-      targetRevision: 12.5.0
+      targetRevision: 12.5.3
       helm:
         releaseName: gitea
         valueFiles:
@@ -26,6 +26,12 @@ spec:
     - repoURL: https://gitea.home.mburnsfire.net/homelab/gitea-k8s.git
       targetRevision: main
       ref: values
+
+    - repoURL: https://gitea.home.mburnsfire.net/homelab/gitea-k8s.git
+      targetRevision: main
+      path: production
+      directory:
+        include: "{rbac.yaml}"
 
   destination:
     server: https://kubernetes.default.svc
@@ -36,6 +42,7 @@ spec:
     syncOptions:
       - CreateNamespace=false
       - ApplyOutOfSyncOnly=true
+      - RespectIgnoreDifferences=true
     retry:
       limit: 5
       backoff:
@@ -56,5 +63,5 @@ spec:
       kind: Secret
       name: gitea
       namespace: gitea
-      jsonPointers:
-        - /data/config_environment.sh
+      jqPathExpressions:
+        - '.data["config_environment.sh"]'
