@@ -18,15 +18,6 @@ serviceAccount:
   create: true
   name: gitea-stage
 
-gitea:
-  oauth:
-    - name: authentik
-      provider: openidConnect
-      existingSecret: gitea-stage-secrets
-      autoDiscoverUrl: https://auth-stage.home.mburnsfire.net/application/o/gitea/.well-known/openid-configuration
-      iconUrl: https://goauthentik.io/img/icon.png
-      scopes: openid email profile
-
 service:
   http:
     type: ClusterIP
@@ -49,6 +40,14 @@ persistence:
   mountPath: /data
 
 gitea:
+  oauth:
+    - name: authentik
+      provider: openidConnect
+      existingSecret: gitea-stage-secrets
+      autoDiscoverUrl: https://auth-stage.home.mburnsfire.net/application/o/gitea/.well-known/openid-configuration
+      iconUrl: https://goauthentik.io/img/icon.png
+      scopes: openid email profile
+
   admin:
     username: "gitea_admin"
     email: "mburns72h+gitea-stage@gmail.com"
