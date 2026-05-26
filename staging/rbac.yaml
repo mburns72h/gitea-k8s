@@ -3,13 +3,13 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: gitea-staging-anyuid
-  namespace: gitea-staging
+  name: gitea-stage-anyuid
+  namespace: gitea-stage
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: system:openshift:scc:anyuid
 subjects:
 - kind: ServiceAccount
-  name: gitea-staging
-  namespace: gitea-staging
+  name: gitea-stage
+  namespace: gitea-stage
