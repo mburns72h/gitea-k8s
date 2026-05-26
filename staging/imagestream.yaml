@@ -3,9 +3,9 @@ apiVersion: image.openshift.io/v1
 kind: ImageStream
 metadata:
   name: gitea
-  namespace: gitea-staging
+  namespace: gitea-stage
   labels:
-    app: gitea-staging
+    app: gitea-stage
 spec:
   lookupPolicy:
     local: true
