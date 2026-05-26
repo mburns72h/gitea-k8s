@@ -181,7 +181,7 @@ gitea:
       ALLOW_LOCALNETWORKS: true
 
     webhook:
-      ALLOWED_HOST_LIST: private
+      ALLOWED_HOST_LIST: "private,172.30.0.0/16"
       SKIP_TLS_VERIFY: true
 
     repository.pull-request:
