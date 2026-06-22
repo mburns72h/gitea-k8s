@@ -19,3 +19,45 @@ spec:
         importMode: Legacy
       referencePolicy:
         type: Local
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: postgresql
+  namespace: gitea-stage
+  labels:
+    app: gitea-stage
+spec:
+  lookupPolicy:
+    local: true
+  tags:
+    - name: "17.6.0-debian-12-r4"
+      from:
+        kind: DockerImage
+        name: docker.io/bitnamilegacy/postgresql:17.6.0-debian-12-r4
+      importPolicy:
+        scheduled: true
+        importMode: Legacy
+      referencePolicy:
+        type: Local
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: valkey
+  namespace: gitea-stage
+  labels:
+    app: gitea-stage
+spec:
+  lookupPolicy:
+    local: true
+  tags:
+    - name: "8.1.3-debian-12-r3"
+      from:
+        kind: DockerImage
+        name: docker.io/bitnamilegacy/valkey:8.1.3-debian-12-r3
+      importPolicy:
+        scheduled: true
+        importMode: Legacy
+      referencePolicy:
+        type: Local
