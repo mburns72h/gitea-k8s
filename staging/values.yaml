@@ -40,7 +40,7 @@ persistence:
   accessModes:
     - ReadWriteMany
   size: 10Gi
-  storageClass: "nfs-default"
+  storageClass: "ocs-storagecluster-cephfs"
   mountPath: /data
 
 gitea:
@@ -249,7 +249,7 @@ postgresql:
     persistence:
       enabled: true
       size: 10Gi
-      storageClass: "nfs-default"
+      storageClass: "ocs-storagecluster-ceph-rbd"
     podSecurityContext:
       enabled: false
     containerSecurityContext:
@@ -273,7 +273,7 @@ valkey:
     persistence:
       enabled: true
       size: 2Gi
-      storageClass: "nfs-default"
+      storageClass: "ocs-storagecluster-ceph-rbd"
     podSecurityContext:
       enabled: false
     containerSecurityContext:
