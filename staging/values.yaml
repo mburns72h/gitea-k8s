@@ -37,10 +37,7 @@ ingress:
 
 persistence:
   enabled: true
-  accessModes:
-    - ReadWriteMany
-  size: 10Gi
-  storageClass: "ocs-storagecluster-cephfs"
+  existingClaim: gitea-shared-storage
   mountPath: /data
 
 gitea:
