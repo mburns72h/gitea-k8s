@@ -7,8 +7,7 @@
 global:
   security:
     allowInsecureImages: true
-  # Use nfs-default storage class to avoid Synology CSI permission issues
-  storageClass: "nfs-default"
+  storageClass: "ocs-storagecluster-ceph-rbd"
 
 # Gitea image configuration
 # Using OpenShift ImageStream - cached image from old cluster
@@ -75,9 +74,7 @@ persistence:
   accessModes:
     - ReadWriteMany
   size: 50Gi
-  # Specify your OpenShift storage class that supports RWX
-  # Use nfs-default to avoid Synology CSI permission issues
-  storageClass: "nfs-default"
+  storageClass: "ocs-storagecluster-cephfs"
   mountPath: /data
 
 # Gitea application configuration
@@ -309,8 +306,7 @@ postgresql-ha:
     persistence:
       enabled: true
       size: 20Gi
-      # Use nfs-default to avoid Synology CSI permission issues
-      storageClass: "nfs-default"
+      storageClass: "ocs-storagecluster-ceph-rbd"
     resources:
       requests:
         cpu: 500m
@@ -362,7 +358,7 @@ redis:
     persistence:
       enabled: true
       size: 8Gi
-      storageClass: "nfs-default"
+      storageClass: "ocs-storagecluster-ceph-rbd"
     resources:
       requests:
         cpu: 100m
