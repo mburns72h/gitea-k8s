@@ -216,9 +216,17 @@ gitea:
       ICON_URL: https://goauthentik.io/img/icon.png
       SCOPES: openid email profile
 
-  # Environment variables for database and secrets
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 2
+      memory: 2Gi
+
+deployment:
   env:
-    # Database configuration
+    # Database
     - name: GITEA__database__HOST
       value: gitea-postgres-primary.gitea.svc:5432
     - name: GITEA__database__NAME
@@ -264,14 +272,6 @@ gitea:
         secretKeyRef:
           name: gitea-redis
           key: redis-password
-
-  resources:
-    requests:
-      cpu: 200m
-      memory: 512Mi
-    limits:
-      cpu: 2
-      memory: 2Gi
 
 # Disable single PostgreSQL instance
 postgresql:
