@@ -21,7 +21,7 @@ spec:
         description: "Gitea stable (1.26.x) rootless releases"
       from:
         kind: DockerImage
-        name: docker.io/gitea/gitea:1.26-rootless
+        name: docker.io/gitea/gitea:1.27-rootless
       importPolicy:
         # Automatically import new images on schedule (checks every ~15 minutes)
         scheduled: true
