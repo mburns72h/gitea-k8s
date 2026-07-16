@@ -6,7 +6,9 @@ image:
   registry: image-registry.openshift-image-registry.svc:5000
   repository: gitea-stage/gitea
   tag: "latest"
-  pullPolicy: Always
+  # renovate: datasource=docker depName=gitea/gitea currentValue=latest-rootless
+  digest: "sha256:414ba5b2b1163480e9ed4213a989cd798579cfa88582a2359303273009b2b852"
+  pullPolicy: IfNotPresent
   rootless: true
 
 replicaCount: 1
