@@ -18,6 +18,9 @@ spec:
   users:
     - name: gitea
       databases: [gitea]
+  databaseInitSQL:
+    name: gitea-postgres-init-sql
+    key: init.sql
   backups:
     pgbackrest:
       repos:
