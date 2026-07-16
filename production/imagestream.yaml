@@ -28,9 +28,10 @@ spec:
         # PreserveOriginal keeps the full manifest list, so the internal registry stores
         # it under the manifest-list digest that Renovate pins in values.yaml.
         # (Legacy stored the amd64-only sub-digest, which never matched Renovate's pin.)
-        # Requires OCP 4.10+; older clusters silently fall back to Legacy — verify with
+        # Requires OCP 4.10+ (PreserveOriginal was introduced there); applying on an older
+        # cluster fails with a field validation error, not a silent fallback. Verify post-apply:
         # `oc get istag gitea:stable-rootless -n gitea -o jsonpath='{.image.metadata.name}'`
-        # post-apply: it should be the manifest-list digest (cd1d2614...), not an amd64 sub-digest.
+        # should return the manifest-list digest (cd1d2614...), not an amd64 sub-digest.
         importMode: PreserveOriginal
       referencePolicy:
         type: Local
