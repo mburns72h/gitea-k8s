@@ -1,0 +1,35 @@
+---
+apiVersion: postgres-operator.crunchydata.com/v1beta1
+kind: PostgresCluster
+metadata:
+  name: gitea-postgres
+  namespace: gitea-stage
+spec:
+  postgresVersion: 17
+  instances:
+    - name: instance1
+      replicas: 1
+      dataVolumeClaimSpec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: ocs-storagecluster-ceph-rbd
+        resources:
+          requests:
+            storage: 10Gi
+  users:
+    - name: gitea
+      databases: [gitea]
+  backups:
+    pgbackrest:
+      repos:
+        - name: repo1
+          schedules:
+            full: "0 2 * * 0"
+            differential: "0 2 * * 1-6"
+          volume:
+            volumeClaimSpec:
+              accessModes: ["ReadWriteOnce"]
+              storageClassName: ""
+              volumeName: gitea-stage-pg-backup
+              resources:
+                requests:
+                  storage: 5Gi
