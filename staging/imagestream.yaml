@@ -7,8 +7,9 @@ metadata:
   labels:
     app: gitea-stage
 spec:
-  lookupPolicy:
-    local: true
+  # lookupPolicy.local intentionally omitted (defaults to false): prevents node-cached
+  # images from masquerading as this stream by name. referencePolicy.type: Local below
+  # is sufficient to direct pod pulls through the internal registry.
   tags:
     - name: "latest-rootless"
       from:
@@ -16,7 +17,9 @@ spec:
         name: docker.io/gitea/gitea:latest-rootless
       importPolicy:
         scheduled: true
-        importMode: Legacy
+        # PreserveOriginal stores the manifest-list digest, matching what Renovate
+        # pins in staging/values.yaml digest: field.
+        importMode: PreserveOriginal
       referencePolicy:
         type: Local
 ---
