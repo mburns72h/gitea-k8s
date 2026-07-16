@@ -7,9 +7,11 @@ metadata:
   annotations:
     description: "Gitea container image stream with automatic updates"
 spec:
-  lookupPolicy:
-    # Allow pods in this namespace to reference this image stream by name
-    local: true
+  # lookupPolicy.local intentionally omitted (defaults to false): a node-cached image
+  # locally tagged as this stream must NOT be resolvable as prod by name. That masquerade
+  # caused the 2026-07 stale-image incident. The Deployment references a full digest ref.
+  # referencePolicy.type: Local on each tag below directs pods to pull from the internal
+  # registry — removing it reverts the pointer to Docker Hub (defeating the imagestream).
   tags:
     # Track stable (1.26.x) rootless releases
     # Note: Tag is "stable-rootless" to match what Helm chart generates (tag "stable" + rootless: true)
@@ -23,7 +25,14 @@ spec:
       importPolicy:
         # Automatically import new images on schedule (checks every ~15 minutes)
         scheduled: true
-        importMode: Legacy
+        # PreserveOriginal keeps the full manifest list, so the internal registry stores
+        # it under the manifest-list digest that Renovate pins in values.yaml.
+        # (Legacy stored the amd64-only sub-digest, which never matched Renovate's pin.)
+        # Requires OCP 4.10+ (PreserveOriginal was introduced there); applying on an older
+        # cluster fails with a field validation error, not a silent fallback. Verify post-apply:
+        # `oc get istag gitea:stable-rootless -n gitea -o jsonpath='{.image.metadata.name}'`
+        # should return the manifest-list digest (cd1d2614...), not an amd64 sub-digest.
+        importMode: PreserveOriginal
       referencePolicy:
         type: Local
 
@@ -37,6 +46,9 @@ spec:
         name: docker.io/gitea/gitea:latest-rootless
       importPolicy:
         scheduled: true
+        # Legacy is intentional: staging does not use digest pinning, so the amd64
+        # sub-digest Legacy stores is sufficient. Change to PreserveOriginal only if
+        # staging ever adopts the same digest-pin pattern as prod (values.yaml digest:).
         importMode: Legacy
       referencePolicy:
         type: Local

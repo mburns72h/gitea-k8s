@@ -16,6 +16,11 @@ image:
   registry: image-registry.openshift-image-registry.svc:5000
   repository: gitea/gitea
   tag: "stable"
+  # Digest pinned in Git and bumped by Renovate (tracks docker.io gitea/gitea:1.26-rootless).
+  # The pull still comes from the internal imagestream above; this is the manifest-list digest,
+  # which requires the imagestream to import with importMode: PreserveOriginal.
+  # renovate: datasource=docker depName=gitea/gitea currentValue=1.26-rootless
+  digest: "sha256:cd1d2614b403fc9b085fa52ceb4424dde9c4dcf5da8e3263abb27955562070c4"
   pullPolicy: IfNotPresent
   rootless: true
 
