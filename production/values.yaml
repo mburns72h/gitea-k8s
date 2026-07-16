@@ -219,24 +219,22 @@ gitea:
   # Environment variables for database and secrets
   env:
     # Database configuration
-    - name: GITEA__database__DB_TYPE
-      value: postgres
     - name: GITEA__database__HOST
-      value: gitea-postgresql-ha-pgpool:5432
+      value: gitea-postgres-primary.gitea.svc:5432
     - name: GITEA__database__NAME
       value: gitea
     - name: GITEA__database__USER
       valueFrom:
         secretKeyRef:
-          name: gitea-db-app
-          key: username
+          name: gitea-postgres-pguser-gitea
+          key: user
     - name: GITEA__database__PASSWD
       valueFrom:
         secretKeyRef:
-          name: gitea-db-app
+          name: gitea-postgres-pguser-gitea
           key: password
     - name: GITEA__database__SSL_MODE
-      value: disable
+      value: require
 
     # Gitea secrets
     - name: GITEA__security__INTERNAL_TOKEN
@@ -279,9 +277,9 @@ gitea:
 postgresql:
   enabled: false
 
-# Enable PostgreSQL HA cluster
+# postgresql-ha disabled — migrated to Crunchy PGO (gitea-postgres)
 postgresql-ha:
-  enabled: true
+  enabled: false
   global:
     postgresql:
       auth:
