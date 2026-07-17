@@ -13,30 +13,7 @@ spec:
   # referencePolicy.type: Local on each tag below directs pods to pull from the internal
   # registry — removing it reverts the pointer to Docker Hub (defeating the imagestream).
   tags:
-    # Track stable (1.26.x) rootless releases
-    # Note: Tag is "stable-rootless" to match what Helm chart generates (tag "stable" + rootless: true)
-    - name: "stable-rootless"
-      annotations:
-        openshift.io/display-name: "Gitea Stable Rootless"
-        description: "Gitea stable (1.26.x) rootless releases"
-      from:
-        kind: DockerImage
-        name: docker.io/gitea/gitea:1.27-rootless
-      importPolicy:
-        # Automatically import new images on schedule (checks every ~15 minutes)
-        scheduled: true
-        # PreserveOriginal keeps the full manifest list, so the internal registry stores
-        # it under the manifest-list digest that Renovate pins in values.yaml.
-        # (Legacy stored the amd64-only sub-digest, which never matched Renovate's pin.)
-        # Requires OCP 4.10+ (PreserveOriginal was introduced there); applying on an older
-        # cluster fails with a field validation error, not a silent fallback. Verify post-apply:
-        # `oc get istag gitea:stable-rootless -n gitea -o jsonpath='{.image.metadata.name}'`
-        # should return the manifest-list digest (cd1d2614...), not an amd64 sub-digest.
-        importMode: PreserveOriginal
-      referencePolicy:
-        type: Local
-
-    # Track latest rootless releases (for staging)
+    # Track latest rootless releases — listed first to match cluster creation order
     - name: "latest-rootless"
       annotations:
         openshift.io/display-name: "Gitea Latest Rootless"
@@ -50,5 +27,28 @@ spec:
         # sub-digest Legacy stores is sufficient. Change to PreserveOriginal only if
         # staging ever adopts the same digest-pin pattern as prod (values.yaml digest:).
         importMode: Legacy
+      referencePolicy:
+        type: Local
+
+    # Track stable (1.27.x) rootless releases
+    # Note: Tag is "stable-rootless" to match what Helm chart generates (tag "stable" + rootless: true)
+    - name: "stable-rootless"
+      annotations:
+        openshift.io/display-name: "Gitea Stable Rootless"
+        description: "Gitea stable (1.27.x) rootless releases"
+      from:
+        kind: DockerImage
+        name: docker.io/gitea/gitea:1.27-rootless
+      importPolicy:
+        # Automatically import new images on schedule (checks every ~15 minutes)
+        scheduled: true
+        # PreserveOriginal keeps the full manifest list, so the internal registry stores
+        # it under the manifest-list digest that Renovate pins in values.yaml.
+        # (Legacy stored the amd64-only sub-digest, which never matched Renovate's pin.)
+        # Requires OCP 4.10+ (PreserveOriginal was introduced there); applying on an older
+        # cluster fails with a field validation error, not a silent fallback. Verify post-apply:
+        # `oc get istag gitea:stable-rootless -n gitea -o jsonpath='{.image.metadata.name}'`
+        # should return the manifest-list digest (414ba5b2...), not an amd64 sub-digest.
+        importMode: PreserveOriginal
       referencePolicy:
         type: Local
