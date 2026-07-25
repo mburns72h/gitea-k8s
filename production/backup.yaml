@@ -1,0 +1,230 @@
+---
+# Nightly gitea backup -> Synology (/volume8/OCP/gitea-prod-backup)
+#
+# Uses the native `gitea dump`, which packs repositories, the database and the
+# configuration into a single archive with a documented restore path. This is
+# the only backup of the Git repositories themselves: the pgBackRest repo
+# (/volume8/OCP/gitea-prod-pg-backup) covers only the database, i.e. users,
+# issues, PRs and settings. Restoring that alone yields a working Gitea with no
+# code in it - including the loss of homelab/argocd-apps, which defines the
+# GitOps deployment.
+#
+# The Synology directory must already exist, owned by the UID gitea runs as:
+#   /volume8/OCP/gitea-prod-backup  ->  drwx------  1000830000:root
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: gitea-prod-backup-pv
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions:
+    - nfsvers=4.1
+    - hard
+    - timeo=600
+    - retrans=3
+  nfs:
+    server: diskstation.home.mburnsfire.net
+    path: /volume8/OCP/gitea-prod-backup
+  claimRef:
+    namespace: gitea
+    name: gitea-prod-backup
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gitea-prod-backup
+  namespace: gitea
+  labels:
+    app.kubernetes.io/name: gitea
+    app.kubernetes.io/component: backup
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: ""
+  volumeName: gitea-prod-backup-pv
+
+---
+# Dedicated identity for the backup job, kept separate from the `gitea` SA so
+# the scale permission is not granted to the application itself.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gitea-backup
+  namespace: gitea
+
+---
+# The dump runs with Gitea stopped, so the job needs to scale the Deployment
+# down and back up. Scoped to exactly that verb on that resource.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: gitea-backup-scaler
+  namespace: gitea
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments/scale"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: gitea-backup-scaler
+  namespace: gitea
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: gitea-backup-scaler
+subjects:
+  - kind: ServiceAccount
+    name: gitea-backup
+    namespace: gitea
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: gitea-backup
+  namespace: gitea
+  labels:
+    app.kubernetes.io/name: gitea
+    app.kubernetes.io/component: backup
+spec:
+  # 03:00 - after the pgBackRest window (01:00) and before npm (04:00).
+  schedule: "0 3 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # Bound the run so a hang cannot leave Gitea scaled down indefinitely.
+      activeDeadlineSeconds: 1800
+      backoffLimit: 1
+      template:
+        spec:
+          serviceAccountName: gitea-backup
+          restartPolicy: Never
+          securityContext:
+            runAsUser: 1000830000
+            runAsGroup: 0
+          containers:
+            - name: backup
+              # The gitea image itself: provides the `gitea` binary, and matches
+              # the running version so the dump format is always consistent.
+              # Pulled via the in-cluster ImageStream, same as the Deployment.
+              image: image-registry.openshift-image-registry.svc:5000/gitea/gitea:stable-rootless
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  set -euo pipefail
+
+                  REPLICAS=3
+                  NS=gitea
+                  DEPLOY=gitea
+                  API=https://kubernetes.default.svc
+                  SA=/var/run/secrets/kubernetes.io/serviceaccount
+
+                  # The gitea image ships neither kubectl nor oc, so scaling is
+                  # done straight against the API with the ServiceAccount token.
+                  scale_to() {
+                    curl -sS -f \
+                      --cacert "${SA}/ca.crt" \
+                      -H "Authorization: Bearer $(cat ${SA}/token)" \
+                      -H "Content-Type: application/merge-patch+json" \
+                      -X PATCH \
+                      -d "{\"spec\":{\"replicas\":$1}}" \
+                      "${API}/apis/apps/v1/namespaces/${NS}/deployments/${DEPLOY}/scale" \
+                      >/dev/null
+                  }
+
+                  running_pods() {
+                    curl -sS -f \
+                      --cacert "${SA}/ca.crt" \
+                      -H "Authorization: Bearer $(cat ${SA}/token)" \
+                      "${API}/api/v1/namespaces/${NS}/pods?labelSelector=app.kubernetes.io%2Fname%3Dgitea" \
+                      | grep -c '"phase"' || true
+                  }
+
+                  # Whatever happens after this point - success, failure, or a
+                  # bad exit from `gitea dump` - Gitea gets scaled back up.
+                  # Argo will NOT restore it for us: the gitea-prod Application
+                  # explicitly ignores /spec/replicas.
+                  restore_replicas() {
+                    echo "Restoring gitea to ${REPLICAS} replicas ..."
+                    scale_to "${REPLICAS}" || echo "WARNING: scale-up failed, gitea may be down"
+                  }
+                  trap restore_replicas EXIT
+
+                  TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+                  ARCHIVE="/backup/gitea-dump-${TIMESTAMP}.zip"
+
+                  echo "Scaling gitea down for a consistent dump ..."
+                  scale_to 0
+                  for i in $(seq 1 60); do
+                    n=$(running_pods)
+                    [ "${n}" = "0" ] && break
+                    echo "  waiting for ${n} pod(s) to terminate ..."
+                    sleep 5
+                  done
+
+                  echo "Running gitea dump ..."
+                  # --skip-log drops actions_log, which is ~6.5MB of the 8MB
+                  # total and is disposable.
+                  gitea dump \
+                    --config /data/gitea/conf/app.ini \
+                    --file "${ARCHIVE}.tmp" \
+                    --tempdir /stage \
+                    --skip-log
+
+                  # Rename only once the dump has completed, so a partial file
+                  # can never be mistaken for a usable backup.
+                  mv "${ARCHIVE}.tmp" "${ARCHIVE}"
+
+                  echo "Pruning archives older than 30 days ..."
+                  find /backup -name 'gitea-dump-*.zip' -mtime +30 -delete
+                  find /backup -name 'gitea-dump-*.zip.tmp' -mtime +1 -delete
+
+                  echo "Current backups:"
+                  ls -lh /backup
+                  echo "Backup complete"
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: "1"
+                  memory: 1Gi
+              volumeMounts:
+                - name: data
+                  mountPath: /data
+                - name: backup
+                  mountPath: /backup
+                - name: stage
+                  mountPath: /stage
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: gitea-shared-storage
+            - name: backup
+              persistentVolumeClaim:
+                claimName: gitea-prod-backup
+            # Scratch space for `gitea dump` to assemble the archive.
+            - name: stage
+              emptyDir:
+                sizeLimit: 2Gi
