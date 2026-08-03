@@ -82,6 +82,15 @@ gitea:
   config:
     APP_NAME: "Gitea Stage"
     RUN_MODE: prod
+    # RunUser defaults to user.CurrentUsername() when unset, which on
+    # OpenShift's arbitrary non-root UID resolves to the raw UID string
+    # instead of "git" if that UID has no /etc/passwd entry yet at the
+    # moment Gitea reads it - breaking SSH git operations
+    # (`must use <uid> for all git operations via ssh`) on some boots.
+    # Safe to set explicitly here: START_SSH_SERVER: true below makes
+    # Gitea skip its RUN_USER-vs-current-user startup consistency check
+    # (see IsRunUserMatchCurrentUser in gitea's modules/setting/setting.go).
+    RUN_USER: git
 
     server:
       DISABLE_SSH: false
