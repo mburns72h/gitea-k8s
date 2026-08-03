@@ -161,11 +161,36 @@ spec:
                       | grep -c '"phase"' || true
                   }
 
+                  ready_pods() {
+                    curl -sS -f \
+                      --cacert "${SA}/ca.crt" \
+                      -H "Authorization: Bearer $(cat ${SA}/token)" \
+                      "${API}/api/v1/namespaces/${NS}/pods?labelSelector=app.kubernetes.io%2Fname%3Dgitea" \
+                      | grep -c '"ready":true' || true
+                  }
+
                   # Whatever happens after this point - success, failure, or a
                   # bad exit from `gitea dump` - Gitea gets scaled back up.
                   # Argo will NOT restore it for us: the gitea-prod Application
                   # explicitly ignores /spec/replicas.
+                  #
+                  # Scaling straight to REPLICAS brings all pods up at once,
+                  # and their init containers race to write the shared
+                  # app.ini on gitea-shared-storage - the loser(s) boot with
+                  # no/incomplete config and serve the install wizard instead
+                  # of the app (seen 2026-08-03). Bringing up a single pod
+                  # first, with no other pod's init containers writing
+                  # app.ini concurrently, guarantees that one gets a clean
+                  # config before the rest join.
                   restore_replicas() {
+                    echo "Restoring gitea to 1 replica first, to avoid concurrent app.ini writes ..."
+                    scale_to 1 || { echo "WARNING: scale-up to 1 failed, gitea may be down"; return; }
+                    for i in $(seq 1 60); do
+                      n=$(ready_pods)
+                      [ "${n}" = "1" ] && break
+                      echo "  waiting for first pod to become ready (${n}/1) ..."
+                      sleep 5
+                    done
                     echo "Restoring gitea to ${REPLICAS} replicas ..."
                     scale_to "${REPLICAS}" || echo "WARNING: scale-up failed, gitea may be down"
                   }
