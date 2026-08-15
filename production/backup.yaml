@@ -161,12 +161,20 @@ spec:
                       | grep -c '"phase"' || true
                   }
 
+                  # Counts pods where the whole pod (all init + main containers)
+                  # is ready, via the pod-level "Ready" condition - NOT a count
+                  # of individual "ready":true fields. Each gitea pod has 3 init
+                  # containers plus the main container, all of which report
+                  # ready:true once healthy, so a single fully-ready pod produces
+                  # 4 such matches, not 1 - counting those directly can never
+                  # reliably equal "1" and made this check meaningless in
+                  # practice. The Ready condition is exactly one bool per pod.
                   ready_pods() {
                     curl -sS -f \
                       --cacert "${SA}/ca.crt" \
                       -H "Authorization: Bearer $(cat ${SA}/token)" \
                       "${API}/api/v1/namespaces/${NS}/pods?labelSelector=app.kubernetes.io%2Fname%3Dgitea" \
-                      | grep -c '"ready":true' || true
+                      | grep -o '"type":"Ready"[^}]*"status":"True"' | wc -l || true
                   }
 
                   # Whatever happens after this point - success, failure, or a
@@ -185,12 +193,20 @@ spec:
                   restore_replicas() {
                     echo "Restoring gitea to 1 replica first, to avoid concurrent app.ini writes ..."
                     scale_to 1 || { echo "WARNING: scale-up to 1 failed, gitea may be down"; return; }
+                    first_ready=""
                     for i in $(seq 1 60); do
                       n=$(ready_pods)
-                      [ "${n}" = "1" ] && break
+                      if [ "${n}" = "1" ]; then
+                        first_ready=1
+                        break
+                      fi
                       echo "  waiting for first pod to become ready (${n}/1) ..."
                       sleep 5
                     done
+                    if [ -z "${first_ready}" ]; then
+                      echo "ERROR: first pod never became ready after 5m - refusing to scale to ${REPLICAS} to avoid a concurrent app.ini write race. Gitea is left at 1 replica; investigate before scaling up manually." >&2
+                      exit 1
+                    fi
                     echo "Restoring gitea to ${REPLICAS} replicas ..."
                     scale_to "${REPLICAS}" || echo "WARNING: scale-up failed, gitea may be down"
                   }
