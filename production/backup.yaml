@@ -200,14 +200,34 @@ spec:
                       "${API}/api/v1/namespaces/${NS}/pods?labelSelector=app.kubernetes.io%2Fname%3Dgitea")
                     curl_rc=$?
                     set -e
-                    # grep exits 1 on zero matches - the normal case on
-                    # every poll before the pod is actually ready - and
-                    # under pipefail that makes the pipeline (and this
-                    # assignment) "fail" too, which set -e then treats as
-                    # fatal: killed the script silently on the very first
-                    # not-ready poll, before even reaching the diag echo
-                    # below. The `|| true` is not optional here.
-                    count=$(grep -o '"type":"Ready"[^}]*"status":"True"' "${resp}" | wc -l || true)
+                    # THE root cause (found 2026-08-17 via live testing,
+                    # not guessed): the API server pretty-prints its JSON
+                    # response for a bare `curl` with no special headers
+                    # (differs from `oc`/kubectl, which negotiate compact
+                    # JSON and never hit this) - real captured response
+                    # looks like `"type": "Ready",\n  "status": "True"`,
+                    # each field on its own line, WITH a space after the
+                    # colon. grep matches line-by-line by default, so a
+                    # pattern expecting both on one compact line can NEVER
+                    # match, regardless of actual pod state - confirmed
+                    # live: the deployed (pre-fix) check reported 0/1 for
+                    # a full 5m against a pod independently confirmed
+                    # Ready=True the whole time. `tr -d '\n'` flattens the
+                    # response first; `[[:space:]]*` after each colon
+                    # tolerates the pretty-printer's space. `[^}]*` still
+                    # scopes the match to a single condition object (stops
+                    # at its closing brace) even once flattened, so this
+                    # can't accidentally span into a different condition
+                    # or a different pod's entry.
+                    #
+                    # grep also exits 1 on zero matches - the normal case
+                    # on every poll before the pod is ready - and under
+                    # pipefail that makes this assignment "fail" too,
+                    # which set -e then treats as fatal: killed the script
+                    # silently on the very first not-ready poll, before
+                    # even reaching the diag echo below. The `|| true` is
+                    # not optional.
+                    count=$(tr -d '\n' < "${resp}" | grep -o '"type":[[:space:]]*"Ready"[^}]*"status":[[:space:]]*"True"' | wc -l || true)
                     echo "  [diag] curl_rc=${curl_rc} http_status=${http_status} body_bytes=$(wc -c < "${resp}") ready_matches=${count}" >&2
                     rm -f "${resp}"
                     echo "${count}"
