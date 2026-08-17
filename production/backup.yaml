@@ -181,7 +181,13 @@ spec:
                   # yet identified, this diagnostic line is what's needed to
                   # tell curl-failure vs. genuinely-slow-pod apart next time.
                   ready_pods() {
-                    resp=$(mktemp)
+                    # Explicit template pointing at /stage (this job's own
+                    # mounted scratch volume) rather than relying on
+                    # mktemp's default tmpdir resolution - that failed here
+                    # with "mktemp: : No such file or directory" (empty
+                    # path), busybox mktemp/TMPDIR behavior differs from
+                    # GNU mktemp and isn't safe to assume.
+                    resp=$(mktemp /stage/ready_pods.XXXXXX)
                     # set +e around the curl call: a connection-level failure
                     # (as opposed to a non-2xx HTTP status, which curl without
                     # -f treats as success) must not trip `set -e` and kill
