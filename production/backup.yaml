@@ -169,12 +169,35 @@ spec:
                   # 4 such matches, not 1 - counting those directly can never
                   # reliably equal "1" and made this check meaningless in
                   # practice. The Ready condition is exactly one bool per pod.
+                  #
+                  # No -f here (unlike scale_to/running_pods): we want the
+                  # response body and status even on a non-2xx, so a genuine
+                  # API/curl failure during the wait loop is distinguishable
+                  # from "pod legitimately not ready yet" instead of both
+                  # silently collapsing to the same "0". Hit 2026-08-16/17:
+                  # two nights running, the first backup attempt reported 0/1
+                  # for the full 5m even though the pod's own Ready condition
+                  # timestamp shows it became ready in ~20s - root cause not
+                  # yet identified, this diagnostic line is what's needed to
+                  # tell curl-failure vs. genuinely-slow-pod apart next time.
                   ready_pods() {
-                    curl -sS -f \
+                    resp=$(mktemp)
+                    # set +e around the curl call: a connection-level failure
+                    # (as opposed to a non-2xx HTTP status, which curl without
+                    # -f treats as success) must not trip `set -e` and kill
+                    # the whole script mid-wait-loop - we need to observe and
+                    # log it, not have the script die silently on it.
+                    set +e
+                    http_status=$(curl -sS -o "${resp}" -w '%{http_code}' \
                       --cacert "${SA}/ca.crt" \
                       -H "Authorization: Bearer $(cat ${SA}/token)" \
-                      "${API}/api/v1/namespaces/${NS}/pods?labelSelector=app.kubernetes.io%2Fname%3Dgitea" \
-                      | grep -o '"type":"Ready"[^}]*"status":"True"' | wc -l || true
+                      "${API}/api/v1/namespaces/${NS}/pods?labelSelector=app.kubernetes.io%2Fname%3Dgitea")
+                    curl_rc=$?
+                    set -e
+                    count=$(grep -o '"type":"Ready"[^}]*"status":"True"' "${resp}" | wc -l)
+                    echo "  [diag] curl_rc=${curl_rc} http_status=${http_status} body_bytes=$(wc -c < "${resp}") ready_matches=${count}" >&2
+                    rm -f "${resp}"
+                    echo "${count}"
                   }
 
                   # Whatever happens after this point - success, failure, or a
