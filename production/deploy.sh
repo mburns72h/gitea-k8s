@@ -4,7 +4,7 @@ set -e
 
 NAMESPACE="gitea"
 RELEASE_NAME="gitea"
-CHART_VERSION="10.6.0"  # Specify version for reproducibility
+CHART_VERSION="12.7.0"  # Specify version for reproducibility
 
 echo "=== Gitea HA Production Deployment ==="
 echo ""

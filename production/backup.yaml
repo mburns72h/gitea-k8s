@@ -247,24 +247,26 @@ spec:
                   # app.ini concurrently, guarantees that one gets a clean
                   # config before the rest join.
                   restore_replicas() {
-                    echo "Restoring gitea to 1 replica first, to avoid concurrent app.ini writes ..."
-                    scale_to 1 || { echo "WARNING: scale-up to 1 failed, gitea may be down"; return; }
-                    first_ready=""
-                    for i in $(seq 1 60); do
-                      n=$(ready_pods)
-                      if [ "${n}" = "1" ]; then
-                        first_ready=1
-                        break
+                    echo "Restoring gitea replicas one by one to avoid concurrent app.ini writes ..."
+                    for target in $(seq 1 "${REPLICAS}"); do
+                      echo "Scaling gitea to ${target} replica(s) ..."
+                      scale_to "${target}" || { echo "WARNING: scale-up to ${target} failed, gitea may be degraded"; return; }
+                      target_ready=""
+                      for i in $(seq 1 60); do
+                        n=$(ready_pods)
+                        if [ "${n}" = "${target}" ]; then
+                          target_ready=1
+                          break
+                        fi
+                        echo "  waiting for pod(s) to become ready (${n}/${target}) ..."
+                        sleep 5
+                      done
+                      if [ -z "${target_ready}" ]; then
+                        echo "ERROR: ${target} pod(s) never became ready after 5m - refusing to scale further. Gitea is left at ${target} replica(s); investigate before scaling up manually." >&2
+                        exit 1
                       fi
-                      echo "  waiting for first pod to become ready (${n}/1) ..."
-                      sleep 5
                     done
-                    if [ -z "${first_ready}" ]; then
-                      echo "ERROR: first pod never became ready after 5m - refusing to scale to ${REPLICAS} to avoid a concurrent app.ini write race. Gitea is left at 1 replica; investigate before scaling up manually." >&2
-                      exit 1
-                    fi
-                    echo "Restoring gitea to ${REPLICAS} replicas ..."
-                    scale_to "${REPLICAS}" || echo "WARNING: scale-up failed, gitea may be down"
+                    echo "Restoration to ${REPLICAS} replicas complete."
                   }
                   trap restore_replicas EXIT
 
