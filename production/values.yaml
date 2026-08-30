@@ -20,7 +20,7 @@ image:
   # The pull still comes from the internal imagestream above; this is the manifest-list digest,
   # which requires the imagestream to import with importMode: PreserveOriginal.
   # renovate: datasource=docker depName=gitea/gitea currentValue=1.27-rootless
-  digest: "sha256:c7953964c6e8fe532cf7fc3f3efdea1d0b161d7859c47e04f5e05489d494dea0"
+  digest: "sha256:1c17ecaead42eb3b5391553d8708103a4beb0e86edf5b9ebc1eb269c318845f2"
   pullPolicy: IfNotPresent
   rootless: true
 
