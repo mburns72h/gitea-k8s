@@ -19,8 +19,8 @@ image:
   # Digest pinned in Git and bumped by Renovate (tracks docker.io gitea/gitea:1.27-rootless).
   # The pull still comes from the internal imagestream above; this is the manifest-list digest,
   # which requires the imagestream to import with importMode: PreserveOriginal.
-  # renovate: datasource=docker depName=gitea/gitea currentValue=1.27-rootless
-  digest: "sha256:1c17ecaead42eb3b5391553d8708103a4beb0e86edf5b9ebc1eb269c318845f2"
+  # renovate: datasource=docker depName=gitea/gitea currentValue=28.0-rootless
+  digest: "sha256:c168e7ccb767164793a67e1e874639488260795567337452b06292d1515bea12"
   pullPolicy: IfNotPresent
   rootless: true
 
