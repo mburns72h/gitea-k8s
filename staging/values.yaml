@@ -7,7 +7,7 @@ image:
   repository: gitea-stage/gitea
   tag: "latest"
   # renovate: datasource=docker depName=gitea/gitea currentValue=latest-rootless
-  digest: "sha256:c168e7ccb767164793a67e1e874639488260795567337452b06292d1515bea12"
+  digest: "sha256:b1a90409ae9afcd5a5725404c3639da7245248848b99e35332968891290b953e"
   pullPolicy: IfNotPresent
   rootless: true
 
