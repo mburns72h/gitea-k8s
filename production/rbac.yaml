@@ -13,3 +13,64 @@ subjects:
 - kind: ServiceAccount
   name: gitea
   namespace: gitea
+---
+# Lets cert-management (separate "cert-management" namespace) write the
+# copied *.home.mburnsfire.net cert Secret into this namespace. Co-located
+# here (not centralized in cert-management's own rbac.yaml) since it's a
+# namespace-local grant specific to this app. See
+# docs/PLAN_npm_migration.md in homelab/cert-management for the full
+# cross-namespace design.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cert-management-write-home-cert
+  namespace: gitea
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "update", "patch"]
+    resourceNames: ["home-mburnsfire-net-tls"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cert-management-write-home-cert
+  namespace: gitea
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cert-management-write-home-cert
+subjects:
+  - kind: ServiceAccount
+    name: cert-management
+    namespace: cert-management
+---
+# Lets the OpenShift router read the copied Secret for this namespace's
+# Route(s) to use via spec.tls.externalCertificate.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: router-read-home-cert
+  namespace: gitea
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+    resourceNames: ["home-mburnsfire-net-tls"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: router-read-home-cert
+  namespace: gitea
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: router-read-home-cert
+subjects:
+  - kind: ServiceAccount
+    name: router
+    namespace: openshift-ingress
