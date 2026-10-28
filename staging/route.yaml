@@ -1,0 +1,22 @@
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: gitea-stage
+  namespace: gitea-stage
+  labels:
+    app.kubernetes.io/name: gitea
+    app.kubernetes.io/instance: gitea-stage
+spec:
+  host: gitea-stage.home.mburnsfire.net
+  to:
+    kind: Service
+    name: gitea-stage-http
+    weight: 100
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+    externalCertificate:
+      name: home-mburnsfire-net-tls
