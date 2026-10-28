@@ -17,3 +17,5 @@ spec:
   tls:
     termination: edge
     insecureEdgeTerminationPolicy: Redirect
+    externalCertificate:
+      name: home-mburnsfire-net-tls
