@@ -9,6 +9,9 @@ spec:
   instances:
     - name: instance1
       replicas: 3
+      # 2 of 3 Patroni members must stay up (equivalent to maxUnavailable: 1) —
+      # losing 2+ at once risks the sync standby and read replicas together.
+      minAvailable: 2
       dataVolumeClaimSpec:
         accessModes: ["ReadWriteOnce"]
         storageClassName: ocs-storagecluster-ceph-rbd

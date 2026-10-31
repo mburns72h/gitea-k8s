@@ -27,6 +27,10 @@ image:
 # Enable HA with 3 replicas
 replicaCount: 3
 
+# Stateless web pods — cap a voluntary disruption at 2 of 3, never all 3
+podDisruptionBudget:
+  minAvailable: 1
+
 # Use RollingUpdate strategy for zero-downtime updates
 strategy:
   type: "RollingUpdate"
