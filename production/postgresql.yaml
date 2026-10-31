@@ -12,6 +12,16 @@ spec:
       # 2 of 3 Patroni members must stay up (equivalent to maxUnavailable: 1) —
       # losing 2+ at once risks the sync standby and read replicas together.
       minAvailable: 2
+      # Hard anti-affinity: the 3 instances must land on distinct nodes. All 3
+      # landed on minisforum-2 once with no rule in place — never again.
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  postgres-operator.crunchydata.com/cluster: gitea-postgres
+                  postgres-operator.crunchydata.com/data: postgres
+              topologyKey: kubernetes.io/hostname
       dataVolumeClaimSpec:
         accessModes: ["ReadWriteOnce"]
         storageClassName: ocs-storagecluster-ceph-rbd

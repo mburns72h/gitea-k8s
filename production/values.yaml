@@ -38,6 +38,18 @@ strategy:
     maxSurge: 1
     maxUnavailable: 0
 
+# Hard anti-affinity: the 3 replicas must land on distinct nodes. Currently
+# spread by luck with no rule in place — same gap that let gitea-postgres
+# land all 3 instances on minisforum-2.
+affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: gitea
+            app.kubernetes.io/instance: gitea
+        topologyKey: kubernetes.io/hostname
+
 # OpenShift compatibility — chart handles restricted SCC security contexts natively
 openshift:
   enabled: true
@@ -393,3 +405,11 @@ redis:
 # Disable redis-cluster (using standalone redis instead)
 redis-cluster:
   enabled: false
+
+# The chart actually runs valkey-cluster (gitea-valkey-cluster), not the
+# redis/redis-cluster blocks above — those are left as-is, out of scope here.
+# Hard anti-affinity: its 3 nodes must land on distinct hosts. Soft (weight 1)
+# only held by luck; same gap that let gitea-postgres collocate.
+valkey-cluster:
+  valkey:
+    podAntiAffinityPreset: hard
