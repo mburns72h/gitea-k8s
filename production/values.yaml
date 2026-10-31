@@ -31,12 +31,18 @@ replicaCount: 3
 podDisruptionBudget:
   minAvailable: 1
 
-# Use RollingUpdate strategy for zero-downtime updates
+# maxSurge: 0, maxUnavailable: 1 — NOT maxSurge: 1/maxUnavailable: 0.
+# With hard pod anti-affinity (below) and only 3 real schedulable nodes for
+# gitea (minisforum-1/2/3 — alien/nuc2/stacker don't tolerate the master
+# taint), a surge pod has nowhere to go: all 3 valid nodes already hold a
+# replica. maxSurge: 1 deadlocked every rollout — confirmed live 2026-10-31
+# when this PR's anti-affinity change synced and the surge pod sat Pending
+# forever while maxUnavailable: 0 refused to free a node for it.
 strategy:
   type: "RollingUpdate"
   rollingUpdate:
-    maxSurge: 1
-    maxUnavailable: 0
+    maxSurge: 0
+    maxUnavailable: 1
 
 # Hard anti-affinity: the 3 replicas must land on distinct nodes. Currently
 # spread by luck with no rule in place — same gap that let gitea-postgres
