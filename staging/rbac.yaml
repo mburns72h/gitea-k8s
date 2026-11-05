@@ -74,3 +74,31 @@ subjects:
   - kind: ServiceAccount
     name: router
     namespace: openshift-ingress
+---
+# See production/rbac.yaml for the full explanation: Patroni's Endpoints-based
+# leader election needs the endpoints/restricted exception, which the Postgres
+# Operator never grants on its own. Found 2026-11-05.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: gitea-postgres-instance-endpoints-restricted
+  namespace: gitea-stage
+rules:
+  - apiGroups: [""]
+    resources: ["endpoints/restricted"]
+    verbs: ["create", "update"]
+    resourceNames: ["gitea-postgres-ha"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: gitea-postgres-instance-endpoints-restricted
+  namespace: gitea-stage
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: gitea-postgres-instance-endpoints-restricted
+subjects:
+  - kind: ServiceAccount
+    name: gitea-postgres-instance
+    namespace: gitea-stage
