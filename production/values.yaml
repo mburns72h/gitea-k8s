@@ -413,9 +413,23 @@ redis-cluster:
   enabled: false
 
 # The chart actually runs valkey-cluster (gitea-valkey-cluster), not the
-# redis/redis-cluster blocks above — those are left as-is, out of scope here.
-# Hard anti-affinity: its 3 nodes must land on distinct hosts. Soft (weight 1)
-# only held by luck; same gap that let gitea-postgres collocate.
+# redis/redis-cluster blocks above — those are left as-is, out of scope here
+# (this chart's bundled cache dependency was renamed upstream from
+# redis/redis-cluster to valkey/valkey-cluster, so the keys above no longer
+# match anything; the chart silently falls back to its own valkey-cluster
+# defaults, cluster mode enabled).
 valkey-cluster:
   valkey:
+    # Hard anti-affinity: its 3 nodes must land on distinct hosts. Soft
+    # (weight 1) only held by luck; same gap that let gitea-postgres collocate.
     podAntiAffinityPreset: hard
+  # The chart's containerSecurityContext.seLinuxOptions defaults to `{}`
+  # (present but empty), which blocks OpenShift's normal SELinux-level
+  # auto-fill under every available SCC. The Bitnami chart documents this
+  # field as [object,nullable] specifically so it can be set to null to omit
+  # it, letting OpenShift default it correctly instead. Found 2026-11-05 when
+  # a full-cluster reboot forced fresh pod admission for the first time in
+  # ~113 days and this quirk finally got exercised, taking gitea down (every
+  # request failed at the session middleware) until this was patched live.
+  containerSecurityContext:
+    seLinuxOptions: null
