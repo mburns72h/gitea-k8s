@@ -8,6 +8,29 @@ global:
   security:
     allowInsecureImages: true
   storageClass: "ocs-storagecluster-ceph-rbd"
+  # Bitnami's own OpenShift-compatibility switch (forces _compatibility.tpl in
+  # every bundled Bitnami subchart, incl. valkey-cluster, to omit
+  # runAsUser/runAsGroup/fsGroup and empty seLinuxOptions and let OpenShift
+  # auto-assign them from the namespace's real uid-range/supplemental-groups).
+  # Default is "auto" (detects via the security.openshift.io/v1 API), but that
+  # detection evidently doesn't fire through Argo CD's Helm render path here -
+  # confirmed 2026-11-06 live: valkey-cluster pods were still getting the
+  # chart's hardcoded runAsUser/runAsGroup/fsGroup: 1001 despite running on
+  # OpenShift. That hardcoded 1001 is what drove the live (and wrong) fix of
+  # widening the gitea namespace's uid-range/supplemental-groups annotations
+  # to include 1001 - which broke admission for every OTHER pod in the
+  # namespace needing the real range, because OpenShift's restricted-v2 SCC
+  # only honors the first comma-separated range for runAsUser/fsGroup
+  # validation (unlike supplemental-groups, which does support a list -
+  # that's why the 2026-11-05 Patroni GID-26 fix worked everywhere else).
+  # Broke both gitea-backup (CronJob's dump pod never got created) and
+  # Crunchy's own pgBackRest diff backups (exec into repo-host rejected) for
+  # ~11h before being caught and fixed here. Forcing this flag instead removes
+  # the 1001 hardcoding at the source, so no namespace annotation widening is
+  # needed for valkey-cluster at all - same as every other pod in this chart.
+  compatibility:
+    openshift:
+      adaptSecurityContext: force
 
 # Gitea image configuration
 # Using OpenShift ImageStream - cached image from old cluster
@@ -423,13 +446,8 @@ valkey-cluster:
     # Hard anti-affinity: its 3 nodes must land on distinct hosts. Soft
     # (weight 1) only held by luck; same gap that let gitea-postgres collocate.
     podAntiAffinityPreset: hard
-  # The chart's containerSecurityContext.seLinuxOptions defaults to `{}`
-  # (present but empty), which blocks OpenShift's normal SELinux-level
-  # auto-fill under every available SCC. The Bitnami chart documents this
-  # field as [object,nullable] specifically so it can be set to null to omit
-  # it, letting OpenShift default it correctly instead. Found 2026-11-05 when
-  # a full-cluster reboot forced fresh pod admission for the first time in
-  # ~113 days and this quirk finally got exercised, taking gitea down (every
-  # request failed at the session middleware) until this was patched live.
-  containerSecurityContext:
-    seLinuxOptions: null
+  # seLinuxOptions used to be nulled out explicitly here to work around the
+  # chart's `{}` default blocking OpenShift's SELinux auto-fill (found
+  # 2026-11-05). Superseded by global.compatibility.openshift.adaptSecurityContext:
+  # force above, which covers this (and runAsUser/runAsGroup/fsGroup) for
+  # every Bitnami subchart in one place - see that comment for why.
