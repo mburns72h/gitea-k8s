@@ -400,20 +400,50 @@ postgresql-ha:
         cpu: 1
         memory: 1Gi
 
-# Enable Redis for session/cache/queue storage (required for HA)
-redis:
+# Dead config, kept only as a historical marker — do not resurrect.
+# This chart's bundled cache dependency was renamed upstream from
+# redis/redis-cluster to valkey/valkey-cluster, so these keys never matched
+# anything and were silently ignored by Helm. The chart fell back to its own
+# valkey-cluster default (cluster-enabled, 3 shards, 0 replicas per shard).
+# redis:
+#   enabled: true
+#   ...
+# redis-cluster:
+#   enabled: false
+
+# Session/cache/queue backing store. Found 2026-11-06: the dead redis: block
+# above meant this ran as valkey-cluster (3 shards, 0 replicas per shard) by
+# chart default, nobody having set valkey-cluster.enabled: false. A shard with
+# no standby plus cluster-require-full-coverage (default yes, unset here)
+# means losing ANY one shard fails reads/writes cluster-wide — and that
+# cluster's hard anti-affinity pinned all 3 shards to the 3 schedulable
+# workers (minisforum-1/2/3), the same nodes the gitea app pods are pinned to.
+# When one worker got cordoned for an OCP update, its shard went Pending with
+# nowhere to reschedule (same deadlock as the app pods), and
+# cluster_state:fail took gitea down entirely — while vikunja and authentik
+# (single-instance redis, no clustering) rode out the same update fine.
+# Gitea's actual load (sessions + a small cache) never needed sharding's
+# capacity, so this is a single valkey instance instead — matches the
+# resilience profile vikunja/authentik already have.
+valkey-cluster:
+  enabled: false
+
+valkey:
   enabled: true
-  # Use imagestream to avoid Docker Hub rate limits
-  image:
-    registry: image-registry.openshift-image-registry.svc:5000
-    repository: gitea/redis
-    tag: 7.2.5-debian-12-r4
   architecture: standalone
   auth:
-    enabled: true
-    existingSecret: gitea-redis
-    existingSecretPasswordKey: redis-password
-  master:
+    # Matches the old cluster's usePassword: false — unauthenticated,
+    # ClusterIP-only. Set a real password (and switch to existingSecret) if
+    # that posture ever changes.
+    enabled: false
+  global:
+    valkey:
+      password: ""
+  # NOTE: this subchart's actual key is `primary`, not `master` — the parent
+  # gitea chart's own packaged default values.yaml sets `valkey.master.*`,
+  # which the subchart doesn't recognize and silently ignores (same failure
+  # mode as the dead redis: block above). Don't copy that pattern here.
+  primary:
     persistence:
       enabled: true
       size: 8Gi
@@ -425,29 +455,7 @@ redis:
       limits:
         cpu: 500m
         memory: 512Mi
-    # OpenShift compatibility
     podSecurityContext:
       enabled: false
     containerSecurityContext:
       enabled: false
-
-# Disable redis-cluster (using standalone redis instead)
-redis-cluster:
-  enabled: false
-
-# The chart actually runs valkey-cluster (gitea-valkey-cluster), not the
-# redis/redis-cluster blocks above — those are left as-is, out of scope here
-# (this chart's bundled cache dependency was renamed upstream from
-# redis/redis-cluster to valkey/valkey-cluster, so the keys above no longer
-# match anything; the chart silently falls back to its own valkey-cluster
-# defaults, cluster mode enabled).
-valkey-cluster:
-  valkey:
-    # Hard anti-affinity: its 3 nodes must land on distinct hosts. Soft
-    # (weight 1) only held by luck; same gap that let gitea-postgres collocate.
-    podAntiAffinityPreset: hard
-  # seLinuxOptions used to be nulled out explicitly here to work around the
-  # chart's `{}` default blocking OpenShift's SELinux auto-fill (found
-  # 2026-11-05). Superseded by global.compatibility.openshift.adaptSecurityContext:
-  # force above, which covers this (and runAsUser/runAsGroup/fsGroup) for
-  # every Bitnami subchart in one place - see that comment for why.
