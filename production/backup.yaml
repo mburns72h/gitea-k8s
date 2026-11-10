@@ -105,8 +105,10 @@ metadata:
     app.kubernetes.io/name: gitea
     app.kubernetes.io/component: backup
 spec:
-  # 03:00 - after the pgBackRest window (01:00) and before npm (04:00).
-  schedule: "0 3 * * *"
+  # 02:00 - after the pgBackRest window (01:00). Moved off 03:00 after a
+  # scheduled ImageStream import at 03:00:22 on 2026-11-09 triggered the
+  # act-runner-ubi build while gitea was scaled to 0, failing its clone (503).
+  schedule: "0 2 * * *"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
